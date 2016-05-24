@@ -1,0 +1,9 @@
+#!/bin/sh
+# Copyright (C) 2015 OpenWrt.org
+
+mknod /dev/videocap c 15 0
+mknod /dev/vuart c 59 0
+mknod /dev/usb c 100 0
+mknod /dev/kcs0 c 42 0
+mknod /dev/kcs1 c 42 1
+mknod /dev/kcs2 c 42 2 ||:
