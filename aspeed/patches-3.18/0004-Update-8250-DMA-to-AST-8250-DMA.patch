@@ -1,0 +1,1094 @@
+From b6d4648c5ea8206967971e5bc2a63036ba094a4e Mon Sep 17 00:00:00 2001
+From: "Anton D. Kachalov" <mouse@yandex-team.ru>
+Date: Tue, 24 May 2016 19:35:49 +0300
+Subject: [PATCH 04/14] Update 8250 DMA to AST 8250 DMA
+
+Signed-off-by: Anton D. Kachalov <mouse@yandex-team.ru>
+---
+ drivers/tty/serial/8250/8250.h      | 163 ++++++----
+ drivers/tty/serial/8250/8250_core.c |  72 +++-
+ drivers/tty/serial/8250/8250_dma.c  | 631 ++++++++++++++++++++++++++----------
+ 3 files changed, 620 insertions(+), 246 deletions(-)
+
+diff --git a/drivers/tty/serial/8250/8250.h b/drivers/tty/serial/8250/8250.h
+index cb51be5..369a14a 100644
+--- a/drivers/tty/serial/8250/8250.h
++++ b/drivers/tty/serial/8250/8250.h
+@@ -15,54 +15,59 @@
+ #include <linux/serial_reg.h>
+ #include <linux/dmaengine.h>
+ 
+-struct uart_8250_dma {
+-	/* Filter function */
+-	dma_filter_fn		fn;
+-
+-	/* Parameter to the filter function */
+-	void			*rx_param;
+-	void			*tx_param;
+-
+-	struct dma_slave_config	rxconf;
+-	struct dma_slave_config	txconf;
+-
+-	struct dma_chan		*rxchan;
+-	struct dma_chan		*txchan;
+-
+-	dma_addr_t		rx_addr;
+-	dma_addr_t		tx_addr;
+-
+-	dma_cookie_t		rx_cookie;
+-	dma_cookie_t		tx_cookie;
++/* ast_uart_dma_cbfn_t *  * buffer callback routine type */
++typedef void (*ast_uart_dma_cbfn_t)(void *dev_id, u16 len);
++
++struct ast_uart_dma_info {
++    void                    *priv;
++    dma_addr_t              dma_virt_addr;
++    struct circ_buf         dma_buf;
++    /* cdriver callbacks */
++    ast_uart_dma_cbfn_t     callback_fn;   /* buffer done callback */
++    struct tasklet_struct   tasklet;
++    int                     tasklet_done;
++    u8                      enable;
++    u8                      dma_ch;
++    spinlock_t              lock;
++};
+ 
+-	void			*rx_buf;
++struct uart_8250_dma {
++    struct ast_uart_dma_info    tx;
++    struct ast_uart_dma_info    rx;
++};
+ 
+-	size_t			rx_size;
+-	size_t			tx_size;
++/* enum ast_uart_chan_op
++   *
++   * operation codes passed to the DMA code by the user, and also used
++   * to inform the current channel owner of any changes to the system state
++   */
+ 
+-	unsigned char		tx_running:1;
++enum ast_uart_chan_op {
++    AST_UART_DMAOP_TRIGGER,
++    AST_UART_DMAOP_STOP,
++    AST_UART_DMAOP_PAUSE,
+ };
+ 
+ struct old_serial_port {
+-	unsigned int uart;
+-	unsigned int baud_base;
+-	unsigned int port;
+-	unsigned int irq;
+-	unsigned int flags;
+-	unsigned char hub6;
+-	unsigned char io_type;
+-	unsigned char *iomem_base;
+-	unsigned short iomem_reg_shift;
+-	unsigned long irqflags;
++    unsigned int uart;
++    unsigned int baud_base;
++    unsigned int port;
++    unsigned int irq;
++    unsigned int flags;
++    unsigned char hub6;
++    unsigned char io_type;
++    unsigned char *iomem_base;
++    unsigned short iomem_reg_shift;
++    unsigned long irqflags;
+ };
+ 
+ struct serial8250_config {
+-	const char	*name;
+-	unsigned short	fifo_size;
+-	unsigned short	tx_loadsz;
+-	unsigned char	fcr;
+-	unsigned char	rxtrig_bytes[UART_FCR_R_TRIG_MAX_STATE];
+-	unsigned int	flags;
++    const char    *name;
++    unsigned short    fifo_size;
++    unsigned short    tx_loadsz;
++    unsigned char    fcr;
++    unsigned char    rxtrig_bytes[UART_FCR_R_TRIG_MAX_STATE];
++    unsigned int    flags;
+ };
+ 
+ #define UART_CAP_FIFO	(1 << 8)	/* UART has FIFO */
+@@ -93,24 +98,24 @@ struct serial8250_config {
+ 
+ static inline int serial_in(struct uart_8250_port *up, int offset)
+ {
+-	return up->port.serial_in(&up->port, offset);
++    return up->port.serial_in(&up->port, offset);
+ }
+ 
+ static inline void serial_out(struct uart_8250_port *up, int offset, int value)
+ {
+-	up->port.serial_out(&up->port, offset, value);
++    up->port.serial_out(&up->port, offset, value);
+ }
+ 
+ void serial8250_clear_and_reinit_fifos(struct uart_8250_port *p);
+ 
+ static inline int serial_dl_read(struct uart_8250_port *up)
+ {
+-	return up->dl_read(up);
++    return up->dl_read(up);
+ }
+ 
+ static inline void serial_dl_write(struct uart_8250_port *up, int value)
+ {
+-	up->dl_write(up, value);
++    up->dl_write(up, value);
+ }
+ 
+ struct uart_8250_port *serial8250_get_port(int line);
+@@ -137,37 +142,37 @@ static inline void serial8250_pnp_exit(void) { }
+ #ifdef CONFIG_ARCH_OMAP1
+ static inline int is_omap1_8250(struct uart_8250_port *pt)
+ {
+-	int res;
+-
+-	switch (pt->port.mapbase) {
+-	case OMAP1_UART1_BASE:
+-	case OMAP1_UART2_BASE:
+-	case OMAP1_UART3_BASE:
+-		res = 1;
+-		break;
+-	default:
+-		res = 0;
+-		break;
+-	}
+-
+-	return res;
++    int res;
++
++    switch (pt->port.mapbase) {
++    case OMAP1_UART1_BASE:
++    case OMAP1_UART2_BASE:
++    case OMAP1_UART3_BASE:
++        res = 1;
++        break;
++    default:
++        res = 0;
++        break;
++    }
++
++    return res;
+ }
+ 
+ static inline int is_omap1510_8250(struct uart_8250_port *pt)
+ {
+-	if (!cpu_is_omap1510())
+-		return 0;
++    if (!cpu_is_omap1510())
++        return 0;
+ 
+-	return is_omap1_8250(pt);
++    return is_omap1_8250(pt);
+ }
+ #else
+ static inline int is_omap1_8250(struct uart_8250_port *pt)
+ {
+-	return 0;
++    return 0;
+ }
+ static inline int is_omap1510_8250(struct uart_8250_port *pt)
+ {
+-	return 0;
++    return 0;
+ }
+ #endif
+ 
+@@ -176,18 +181,46 @@ extern int serial8250_tx_dma(struct uart_8250_port *);
+ extern int serial8250_rx_dma(struct uart_8250_port *, unsigned int iir);
+ extern int serial8250_request_dma(struct uart_8250_port *);
+ extern void serial8250_release_dma(struct uart_8250_port *);
++extern void ast_uart_tx_buffdone(void *dev_id, u16 len);
++extern void ast_uart_rx_buffdone(void *dev_id, u16 len);
++extern void ast_uart_tx_udma_tasklet_func(unsigned long data);
++extern void ast_uart_rx_udma_tasklet_func(unsigned long data);
++extern int serial8250_dma_config(struct uart_8250_port *p);
++extern int ast_uart_tx_udma_request(struct uart_8250_port *p, ast_uart_dma_cbfn_t rtn, void *id);
++extern int ast_uart_rx_udma_request(struct uart_8250_port *p, ast_uart_dma_cbfn_t rtn, void *id);
++extern int ast_uart_udma_init(struct uart_8250_port *p);
+ #else
+ static inline int serial8250_tx_dma(struct uart_8250_port *p)
+ {
+-	return -1;
++    return -1;
+ }
+ static inline int serial8250_rx_dma(struct uart_8250_port *p, unsigned int iir)
+ {
+-	return -1;
++    return -1;
+ }
+ static inline int serial8250_request_dma(struct uart_8250_port *p)
+ {
+-	return -1;
++    return -1;
+ }
+ static inline void serial8250_release_dma(struct uart_8250_port *p) { }
++static inline void ast_uart_tx_buffdone(void *dev_id, u16 len) { }
++static inline void ast_uart_rx_buffdone(void *dev_id, u16 len) { }
++static inline void ast_uart_tx_udma_tasklet_func(unsigned long data) { }
++static inline void ast_uart_rx_udma_tasklet_func(unsigned long data) { }
++static inline int serial8250_dma_config(struct uart_8250_port *p)
++{
++    return -1;
++}
++static inline int ast_uart_tx_udma_request(struct uart_8250_port *p, ast_uart_dma_cbfn_t rtn, void *id)
++{
++    return -1;
++}
++static inline int ast_uart_rx_udma_request(struct uart_8250_port *p, ast_uart_dma_cbfn_t rtn, void *id)
++{
++    return -1;
++}
++static inline int ast_uart_udma_init(struct uart_8250_port *p)
++{
++    return -1;
++}
+ #endif
+diff --git a/drivers/tty/serial/8250/8250_core.c b/drivers/tty/serial/8250/8250_core.c
+index e5c31ea..be4ba0f 100644
+--- a/drivers/tty/serial/8250/8250_core.c
++++ b/drivers/tty/serial/8250/8250_core.c
+@@ -331,6 +331,10 @@ static const struct serial8250_config uart_config[] = {
+ 	},
+ };
+ 
++#if defined(CONFIG_SERIAL_8250_DMA) && defined(CONFIG_ASTSERIAL)
++static struct uart_8250_port *serial8250_find_match_or_unused(struct uart_port *port);
++#endif
++
+ /* Uart divisor latch read */
+ static int default_serial_dl_read(struct uart_8250_port *up)
+ {
+@@ -1587,8 +1591,9 @@ int serial8250_handle_irq(struct uart_port *port, unsigned int iir)
+ 	DEBUG_INTR("status = %x...", status);
+ 
+ 	if (status & (UART_LSR_DR | UART_LSR_BI)) {
+-		if (up->dma)
++		if (up->dma) {
+ 			dma_err = serial8250_rx_dma(up, iir);
++        }
+ 
+ 		if (!up->dma || dma_err)
+ 			status = serial8250_rx_chars(up, status);
+@@ -1677,8 +1682,9 @@ static irqreturn_t serial8250_interrupt(int irq, void *dev_id)
+ 		if (port->handle_irq(port)) {
+ 			handled = 1;
+ 			end = NULL;
+-		} else if (end == NULL)
++		} else if (end == NULL) {
+ 			end = l;
++        }
+ 
+ 		l = l->next;
+ 
+@@ -1765,6 +1771,10 @@ static int serial_link_irq_chain(struct uart_8250_port *up)
+ 		i->head = &up->list;
+ 		spin_unlock_irq(&i->lock);
+ 		irq_flags |= up->port.irqflags;
++#ifdef CONFIG_ASTSERIAL
++        IRQ_SET_HIGH_LEVEL(up->port.irq);
++        IRQ_SET_LEVEL_TRIGGER(up->port.irq);
++#endif
+ 		ret = request_irq(up->port.irq, serial8250_interrupt,
+ 				  irq_flags, "serial", i);
+ 		if (ret < 0)
+@@ -2274,7 +2284,10 @@ dont_test_tx_en:
+ 	 * are set via set_termios(), which will be occurring imminently
+ 	 * anyway, so we don't enable them here.
+ 	 */
+-	up->ier = UART_IER_RLSI | UART_IER_RDI;
++	if (!up->dma)
++        up->ier = UART_IER_RLSI | UART_IER_RDI;
++    else
++        up->ier = 0;
+ 	serial_port_out(port, UART_IER, up->ier);
+ 
+ 	if (port->flags & UPF_FOURPORT) {
+@@ -3125,11 +3138,18 @@ static void __init serial8250_isa_init_ports(void)
+ 		port->uartclk  = old_serial_port[i].baud_base * 16;
+ 		port->flags    = old_serial_port[i].flags;
+ 		port->hub6     = old_serial_port[i].hub6;
++#ifdef CONFIG_ASTSERIAL
++        up->port.mapbase  = old_serial_port[i].port;
++#endif
+ 		port->membase  = old_serial_port[i].iomem_base;
+ 		port->iotype   = old_serial_port[i].io_type;
+ 		port->regshift = old_serial_port[i].iomem_reg_shift;
+ 		set_io_from_upio(port);
+ 		port->irqflags |= irqflag;
++#if defined(CONFIG_SERIAL_8250_DMA) && defined(CONFIG_ASTSERIAL)
++        serial8250_dma_config(up);
++#endif
++
+ 		if (serial8250_isa_config != NULL)
+ 			serial8250_isa_config(i, &up->port, &up->capabilities);
+ 
+@@ -3432,8 +3452,47 @@ static int serial8250_probe(struct platform_device *dev)
+ 				p->iobase, (unsigned long long)p->mapbase,
+ 				p->irq, ret);
+ 		}
+-	}
++
++#if defined(CONFIG_SERIAL_8250_DMA) && defined(CONFIG_ASTSERIAL)
++    }
++
++    for (i = 0; i < nr_uarts; i++) {
++        struct uart_8250_port *p=&serial8250_ports[i];
++        if (p->dma) {
++
++            tasklet_init(&p->dma->rx.tasklet, ast_uart_rx_udma_tasklet_func,
++                    (unsigned long)p);
++
++            ret = ast_uart_rx_udma_request(p, ast_uart_rx_buffdone, &serial8250_ports[i]);
++            if (ret < 0) {
++                printk("Error : failed to get rx dma channel[%d]\n", p->port.line);
++                goto out_ast_uart_unregister_port;
++            }
++
++            ret = ast_uart_tx_udma_request(p, ast_uart_tx_buffdone, &serial8250_ports[i]);
++            if (ret < 0) {
++                printk("Error : failed to get tx dma channel[%d]\n", p->port.line);
++                return ret;
++            }
++        }
++    }
++
++	return 0;
++
++out_ast_uart_unregister_port:
++    for (i = 0; i < nr_uarts; i++) {
++        struct uart_8250_port *up = &serial8250_ports[i];
++
++        if (up->port.dev == &dev->dev)
++            serial8250_unregister_port(i);
++    };
++    return ret;
++#else
++
++    }
+ 	return 0;
++#endif
++
+ }
+ 
+ /*
+@@ -3632,6 +3691,7 @@ int serial8250_register_8250_port(struct uart_8250_port *up)
+ 		ret = uart_add_one_port(&serial8250_reg, &uart->port);
+ 		if (ret == 0)
+ 			ret = uart->port.line;
++
+ 	}
+ 	mutex_unlock(&serial_mutex);
+ 
+@@ -3670,6 +3730,10 @@ static int __init serial8250_init(void)
+ 	int ret;
+ 
+ 	serial8250_isa_init_ports();
++#if defined(CONFIG_SERIAL_8250_DMA) && defined(CONFIG_ASTSERIAL)
++    ast_uart_udma_init(serial8250_ports);
++#endif
++
+ 
+ 	printk(KERN_INFO "Serial: 8250/16550 driver, "
+ 		"%d ports, IRQ sharing %sabled\n", nr_uarts,
+diff --git a/drivers/tty/serial/8250/8250_dma.c b/drivers/tty/serial/8250/8250_dma.c
+index 148ffe4..e82aa8d 100644
+--- a/drivers/tty/serial/8250/8250_dma.c
++++ b/drivers/tty/serial/8250/8250_dma.c
+@@ -11,234 +11,511 @@
+ #include <linux/tty.h>
+ #include <linux/tty_flip.h>
+ #include <linux/serial_reg.h>
++#include <linux/init.h>
+ #include <linux/dma-mapping.h>
++#include <linux/slab.h>
++#include <mach/hardware.h>
++#include <linux/delay.h>
+ 
+ #include "8250.h"
+ 
+-static void __dma_tx_complete(void *param)
++//#define CONFIG_UART_DMA_DEBUG
++
++#ifdef CONFIG_UART_DMA_DEBUG
++    #define UART_DBG(fmt, args...) printk("%s() " fmt, __FUNCTION__, ## args)
++#else
++    #define UART_DBG(fmt, args...)
++#endif
++
++#define UART_UDMA_TIMER_DEFAULT_VALUE 0x171
++
++#define AST_UART_TX_DMA_BUFFER_SIZE                        UDMA_BUFF_SIZE_4KB 
++#if AST_UART_TX_DMA_BUFFER_SIZE==UDMA_BUFF_SIZE_1KB
++  #define AST_UART_TX_DMA_BUFFER_SIZE_VAL                  1024
++#elif AST_UART_TX_DMA_BUFFER_SIZE==UDMA_BUFF_SIZE_4KB
++  #define AST_UART_TX_DMA_BUFFER_SIZE_VAL                  4*1024
++#elif AST_UART_TX_DMA_BUFFER_SIZE==UDMA_BUFF_SIZE_16KB
++  #define AST_UART_TX_DMA_BUFFER_SIZE_VAL                  16*1024
++#else /*AST_UART_TX_DMA_BUFFER_SIZE==UDMA_BUFF_SIZE_64KB*/
++  #define AST_UART_TX_DMA_BUFFER_SIZE_VAL                  64*1024
++#endif
++
++
++#define AST_UART_RX_DMA_BUFFER_SIZE                        UDMA_BUFF_SIZE_64KB 
++#if AST_UART_RX_DMA_BUFFER_SIZE==UDMA_BUFF_SIZE_1KB
++  #define AST_UART_RX_DMA_BUFFER_SIZE_VAL                  1024
++#elif AST_UART_RX_DMA_BUFFER_SIZE==UDMA_BUFF_SIZE_4KB
++  #define AST_UART_RX_DMA_BUFFER_SIZE_VAL                  4*1024
++#elif AST_UART_RX_DMA_BUFFER_SIZE==UDMA_BUFF_SIZE_16KB
++  #define AST_UART_RX_DMA_BUFFER_SIZE_VAL                  16*1024
++#else /*AST_UART_RX_DMA_BUFFER_SIZE==UDMA_BUFF_SIZE_64KB*/
++  #define AST_UART_RX_DMA_BUFFER_SIZE_VAL                  64*1024
++#endif
++
++#define SCU_HARDWARE_STRAP_REQ                      0x70
++#define SCU_HW_STRAP_REQ_SEL_UART_DEBUG_PORT        (1 << 29)
++
++static int dma_count=0;
++u32 locount=0;
++u32 errcount=0;
++
++static inline void ast_udma_bufffdone(struct uart_8250_port *p, u8 dir);
++static irqreturn_t ast_uart_udma_irq(int irq, void *dev_id);
++static int ast_uart_tx_udma_update(struct uart_8250_port *p, u16 point);
++static int ast_uart_tx_udma_enqueue(struct uart_8250_port *p);
++static int ast_uart_rx_udma_enqueue(struct uart_8250_port *p);
++static int ast_uart_rx_udma_ctrl(struct uart_8250_port *p, enum ast_uart_chan_op op);
++static int ast_uart_tx_udma_ctrl(struct uart_8250_port *p, enum ast_uart_chan_op op);
++
++static void ast_uart_udma_write(u32 value, u32 offset)
+ {
+-	struct uart_8250_port	*p = param;
+-	struct uart_8250_dma	*dma = p->dma;
+-	struct circ_buf		*xmit = &p->port.state->xmit;
+-	unsigned long	flags;
++    iowrite32( value, (void * __iomem)AST_UART_UDMA_VA_BASE + offset );
++}
+ 
+-	dma_sync_single_for_cpu(dma->txchan->device->dev, dma->tx_addr,
+-				UART_XMIT_SIZE, DMA_TO_DEVICE);
++static u32 ast_uart_udma_read(u32 offset)
++{
++    return( ioread32( (void * __iomem)AST_UART_UDMA_VA_BASE + offset ) );
++}
+ 
+-	spin_lock_irqsave(&p->port.lock, flags);
++int serial8250_tx_dma(struct uart_8250_port *p)
++{
++    struct circ_buf *xmit = &p->port.state->xmit;
++    UART_DBG("line [%d]  \n", p->dma->tx.dma_ch);
++
++    ast_uart_tx_udma_ctrl(p, AST_UART_DMAOP_PAUSE);
++    dma_sync_single_for_device(p->port.dev,
++                               p->dma->tx.dma_virt_addr,
++                               AST_UART_TX_DMA_BUFFER_SIZE_VAL,
++                               DMA_TO_DEVICE);
++    //update xmit->head -->fot tx 
++    ast_uart_tx_udma_update(p, xmit->head);
++    ast_uart_tx_udma_ctrl(p, AST_UART_DMAOP_TRIGGER);
++    return 0;
++}
++EXPORT_SYMBOL_GPL(serial8250_tx_dma);
+ 
+-	dma->tx_running = 0;
++int serial8250_rx_dma(struct uart_8250_port *p, unsigned int iir)
++{
++    return 0;
++}
++EXPORT_SYMBOL_GPL(serial8250_rx_dma);
++
++int serial8250_request_dma(struct uart_8250_port *p)
++{
++    struct uart_8250_dma *dma = p->dma;
++
++    dma->rx.dma_buf.head = 0;
++    dma->rx.dma_buf.tail = 0;
++    dma->rx.dma_buf.buf = (unsigned char *)dma_alloc_coherent(NULL, AST_UART_RX_DMA_BUFFER_SIZE_VAL, &dma->rx.dma_virt_addr, GFP_KERNEL);
++    UART_DBG("RX buff vir = %p, phy = %x \n", dma->rx.dma_buf.buf, dma->rx.dma_virt_addr);
++    ast_uart_rx_udma_ctrl(p, AST_UART_DMAOP_STOP);
++    ast_uart_rx_udma_enqueue(p);
++    mdelay(300);
++    ast_uart_rx_udma_ctrl(p, AST_UART_DMAOP_TRIGGER);
++
++    dma->tx.dma_buf.head = 0;
++    dma->tx.dma_buf.tail = 0;
++    dma->tx.dma_buf.buf = p->port.state->xmit.buf;
++    dma->tx.dma_virt_addr = dma_map_single(p->port.dev,
++                                           dma->tx.dma_buf.buf,
++                                           UART_XMIT_SIZE,
++                                           DMA_TO_DEVICE);
++                        
++    ast_uart_tx_udma_ctrl(p, AST_UART_DMAOP_STOP);
++    ast_uart_tx_udma_enqueue(p);
++    return 0;
++}
++EXPORT_SYMBOL_GPL(serial8250_request_dma);
+ 
+-	xmit->tail += dma->tx_size;
+-	xmit->tail &= UART_XMIT_SIZE - 1;
+-	p->port.icount.tx += dma->tx_size;
++void serial8250_release_dma(struct uart_8250_port *p)
++{
++    ast_uart_rx_udma_ctrl(p, AST_UART_DMAOP_STOP);
++    ast_uart_tx_udma_ctrl(p, AST_UART_DMAOP_STOP);
++    UART_DBG("free TX , RX buffer \n");
++    dma_free_coherent(p->port.dev,
++                      AST_UART_RX_DMA_BUFFER_SIZE_VAL,
++                      p->dma->rx.dma_buf.buf,
++                      p->dma->rx.dma_virt_addr);
++    dma_unmap_single(p->port.dev, p->dma->tx.dma_virt_addr,
++                     AST_UART_TX_DMA_BUFFER_SIZE_VAL,
++                     DMA_TO_DEVICE);
++}
++EXPORT_SYMBOL_GPL(serial8250_release_dma);
+ 
+-	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+-		uart_write_wakeup(&p->port);
++static inline void ast_udma_bufffdone(struct uart_8250_port *p, u8 dir)
++{
++    u32 len=0;
++    int ch = (dir==DMA_TO_DEVICE?p->dma->tx.dma_ch:p->dma->rx.dma_ch);
++    struct ast_uart_dma_info *udma = (dir==DMA_TO_DEVICE?(&(p->dma->tx)):(&(p->dma->rx)));
++
++    if(udma->enable == 0) {
++        printk("udma Please check \n");
++        return;
++    }
++
++    if(dir==DMA_TO_DEVICE) {
++        len = ast_uart_udma_read(UART_TX_R_POINT(ch)) ;
++        UART_DBG("tx rp %x , wp %x \n", ast_uart_udma_read(UART_TX_R_POINT(ch)), ast_uart_udma_read(UART_TX_W_POINT(ch)));
++        
++    }
++    
++    UART_DBG("<dma dwn>: ch[(%d:%d)] : %s ,len : %d \n", p->port.line, ch, (dir==DMA_TO_DEVICE ? "tx" : "rx"), len);
++
++    if (udma->callback_fn != NULL)
++        (udma->callback_fn)(p, len);
++}
+ 
+-	if (!uart_circ_empty(xmit) && !uart_tx_stopped(&p->port))
+-		serial8250_tx_dma(p);
++static irqreturn_t ast_uart_udma_irq(int irq, void *dev_id)
++{
++    struct uart_8250_port *p = (struct uart_8250_port *)dev_id;
++    int count=0;
++
++    u32 tx_sts = (u16) ast_uart_udma_read(UART_TX_UDMA_ISR);
++    u32 rx_sts = (u16) ast_uart_udma_read(UART_RX_UDMA_ISR);
++
++    UART_DBG("tx sts : %x, rx sts : %x \n",tx_sts, rx_sts);
++
++    if((tx_sts == 0) && (rx_sts == 0)) {
++        printk("UDMA IRQ ERROR !!!\n");
++        return IRQ_HANDLED;    
++    }
++
++    while (rx_sts) {
++        /* BMC DEBUG PORT doesn't SUPPORT DMA mode */
++        if (p->dma==NULL) p++;
++        if (rx_sts & (1 << count)) {
++            /* clear the interrupt status */
++            ast_uart_udma_write((1 << count), UART_RX_UDMA_ISR);
++            ast_udma_bufffdone(p, DMA_FROM_DEVICE);
++        }
++        rx_sts &= ~(1 << count);
++        count++;
++        p++;
++    }
++
++
++    count=0;
++
++    while (tx_sts) {
++        /* BMC DEBUG PORT doesn't SUPPORT DMA mode */
++        if (p->dma==NULL) p++;
++        if (tx_sts & (1 << count)) {
++            /* clear the interrupt status */
++            ast_uart_udma_write((1 << count), UART_TX_UDMA_ISR);
++            ast_udma_bufffdone(p, DMA_TO_DEVICE);
++        }
++        tx_sts &= ~(1 << count);
++        count++;
++        p++;
++    }
++
++    return IRQ_HANDLED;
++}
+ 
+-	spin_unlock_irqrestore(&p->port.lock, flags);
++int ast_uart_udma_init(struct uart_8250_port *p)
++{
++    int ret;
++
++    ast_uart_udma_write(0x400, UART_UDMA_TIMER);
++    ast_uart_udma_write(0xfff, UART_TX_UDMA_ISR);
++    ast_uart_udma_write(0, UART_TX_UDMA_IER);
++    ast_uart_udma_write(0xfff, UART_RX_UDMA_ISR);
++    ast_uart_udma_write(0, UART_RX_UDMA_IER);
++    ast_uart_udma_write(UART_UDMA_TIMER_DEFAULT_VALUE, UART_UDMA_TIMER);
++
++    ret = request_irq(IRQ_UART_UDMA_INT,
++                      ast_uart_udma_irq, IRQF_DISABLED, 
++                      "ast_uart_udma", p);
++    if (ret) {
++        printk (KERN_ERR "Request UART UDMA IRQ Fail\n");
++        return -1;
++    }
++
++    ast_uart_udma_write(UDMA_SET_TX_BUFF_SIZE(AST_UART_TX_DMA_BUFFER_SIZE) | UDMA_SET_RX_BUFF_SIZE(AST_UART_RX_DMA_BUFFER_SIZE), UART_UDMA_CONF);
++
++    return 0;
++}                                                                              
++EXPORT_SYMBOL(ast_uart_udma_init);
++
++static int ast_uart_tx_udma_update(struct uart_8250_port *p, u16 point)
++{
++    unsigned long flags;
++    int ch = p->dma->tx.dma_ch;
++    UART_DBG("TX DMA CTRL [ch (%d:%d)] \n", p->port.line, ch);
++
++    local_irq_save(flags);
++    ast_uart_udma_write(point, UART_TX_W_POINT(ch));
++    local_irq_restore(flags);
++    return 0;
+ }
+ 
+-static void __dma_rx_complete(void *param)
++void ast_uart_rx_udma_tasklet_func(unsigned long data)
+ {
+-	struct uart_8250_port	*p = param;
+-	struct uart_8250_dma	*dma = p->dma;
+-	struct tty_port		*tty_port = &p->port.state->port;
+-	struct dma_tx_state	state;
+-	int			count;
++    struct uart_8250_port *up = (struct uart_8250_port *)data;
++    struct circ_buf *rx_ring = &up->dma->rx.dma_buf;
++    struct tty_port *port = &(up->port.state->port);
++
++    u32 h=0,t=0;
++    u32 len=0;
++    int ch = up->dma->rx.dma_ch;
++    UART_DBG("rx rp %x , wp %x \n", ast_uart_udma_read(UART_RX_R_POINT(ch)), ast_uart_udma_read(UART_RX_W_POINT(ch)));
++    spin_lock_irq(&up->dma->rx.lock);
++    ast_uart_rx_udma_ctrl(up, AST_UART_DMAOP_TRIGGER);
++    h=ast_uart_udma_read(UART_RX_W_POINT(ch));
++    t=ast_uart_udma_read(UART_RX_R_POINT(ch));
++    len = ast_uart_udma_read(UART_RX_W_POINT(ch)) ;
++    ast_uart_udma_write(len,UART_RX_R_POINT(ch)) ;
++    if (t > h) {
++        len=(AST_UART_RX_DMA_BUFFER_SIZE_VAL-t)+h+1;
++    } else {
++        len=h-t;
++    }
++
++    if ((rx_ring->head+len) > AST_UART_RX_DMA_BUFFER_SIZE_VAL)
++        rx_ring->head=(rx_ring->head+len) - AST_UART_RX_DMA_BUFFER_SIZE_VAL -1;
++    else
++        rx_ring->head+= len;
++
++    {
++        if (rx_ring->head != rx_ring->tail) {
++            if (rx_ring->head < rx_ring->tail) {
++                tty_insert_flip_string(port, &rx_ring->buf[rx_ring->tail], AST_UART_RX_DMA_BUFFER_SIZE_VAL-rx_ring->tail);
++                spin_lock(&up->port.lock);
++                tty_flip_buffer_push(port);
++                spin_unlock(&up->port.lock);
++                rx_ring->tail = 0;
++            }
++
++            if (rx_ring->head != rx_ring->tail) {
++                tty_insert_flip_string(port, &rx_ring->buf[rx_ring->tail], rx_ring->head-rx_ring->tail);
++                rx_ring->tail = rx_ring->head;
++            }
++        }
++    }
++    spin_unlock_irq(&up->dma->rx.lock);
++
++    spin_lock(&up->port.lock);
++    tty_flip_buffer_push(port);
++    spin_unlock(&up->port.lock);
++}
++EXPORT_SYMBOL_GPL(ast_uart_rx_udma_tasklet_func);
+ 
+-	dma_sync_single_for_cpu(dma->rxchan->device->dev, dma->rx_addr,
+-				dma->rx_size, DMA_FROM_DEVICE);
++void ast_uart_rx_buffdone(void *dev_id, u16 len)
++{
++    struct uart_8250_port *up = (struct uart_8250_port *)dev_id;
+ 
+-	dmaengine_tx_status(dma->rxchan, dma->rx_cookie, &state);
+-	dmaengine_terminate_all(dma->rxchan);
++    UART_DBG("line [(%d:%d)],head = %d, len : %d\n",up->port.line,up->dma->rx.dma_ch,up->dma->rx.dma_buf.head, len);
++    tasklet_schedule(&up->dma->rx.tasklet);
++}
++EXPORT_SYMBOL_GPL(ast_uart_rx_buffdone);
+ 
+-	count = dma->rx_size - state.residue;
++void ast_uart_tx_buffdone(void *dev_id, u16 len)
++{
++    struct uart_8250_port *up = (struct uart_8250_port *) dev_id;
++    struct circ_buf *xmit = &up->port.state->xmit;
+ 
+-	tty_insert_flip_string(tty_port, dma->rx_buf, count);
+-	p->port.icount.rx += count;
++    UART_DBG("line [(%d:%d)] : tx len = %d \n", up->port.line, up->dma->tx.dma_ch, len);    
++
++    spin_lock(&up->port.lock);
++    //-->get tail for update len 
++    xmit->tail = len;
++    UART_DBG("???? line [%d], xmit->head =%d, xmit->tail = %d\n",up->dma->tx.dma_ch,xmit->head, xmit->tail);
++
++    if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
++            uart_write_wakeup(&up->port);
++
++    if(xmit->head != xmit->tail) {
++        ast_uart_tx_udma_ctrl(up, AST_UART_DMAOP_PAUSE);
++        dma_sync_single_for_device(up->port.dev,
++                                   up->dma->tx.dma_virt_addr,
++                                   AST_UART_TX_DMA_BUFFER_SIZE_VAL,
++                                   DMA_TO_DEVICE);
++        //update xmit->head -->fot tx 
++        ast_uart_tx_udma_update(up, xmit->head);
++        ast_uart_tx_udma_ctrl(up, AST_UART_DMAOP_TRIGGER);
++    }
++
++    spin_unlock(&up->port.lock);
+ 
+-	tty_flip_buffer_push(tty_port);
+ }
++EXPORT_SYMBOL_GPL(ast_uart_tx_buffdone);
+ 
+-int serial8250_tx_dma(struct uart_8250_port *p)
++int ast_uart_tx_udma_request(struct uart_8250_port *p, ast_uart_dma_cbfn_t rtn, void *id)
+ {
+-	struct uart_8250_dma		*dma = p->dma;
+-	struct circ_buf			*xmit = &p->port.state->xmit;
+-	struct dma_async_tx_descriptor	*desc;
++    unsigned long flags;
++    int ch = p->dma->tx.dma_ch;
++
++    UART_DBG("TX DMA REQUEST ch = (%d:%d) \n", p->port.line, ch);
+ 
+-	if (uart_tx_stopped(&p->port) || dma->tx_running ||
+-	    uart_circ_empty(xmit))
+-		return 0;
++    local_irq_save(flags);
+ 
+-	dma->tx_size = CIRC_CNT_TO_END(xmit->head, xmit->tail, UART_XMIT_SIZE);
++    p->dma->tx.priv = id;
++    p->dma->tx.callback_fn = rtn;
+ 
+-	desc = dmaengine_prep_slave_single(dma->txchan,
+-					   dma->tx_addr + xmit->tail,
+-					   dma->tx_size, DMA_MEM_TO_DEV,
+-					   DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+-	if (!desc)
+-		return -EBUSY;
++    //DMA IRQ En
++    ast_uart_udma_write(ast_uart_udma_read(UART_TX_UDMA_IER) | (1 << ch),
++                        UART_TX_UDMA_IER);
+ 
+-	dma->tx_running = 1;
++    local_irq_restore(flags);
+ 
+-	desc->callback = __dma_tx_complete;
+-	desc->callback_param = p;
++    return 0;
+ 
+-	dma->tx_cookie = dmaengine_submit(desc);
++}
+ 
+-	dma_sync_single_for_device(dma->txchan->device->dev, dma->tx_addr,
+-				   UART_XMIT_SIZE, DMA_TO_DEVICE);
++EXPORT_SYMBOL(ast_uart_tx_udma_request);
+ 
+-	dma_async_issue_pending(dma->txchan);
++int ast_uart_rx_udma_request(struct uart_8250_port *p, ast_uart_dma_cbfn_t rtn, void *id)
++{
++    unsigned long flags;
++    int ch = p->dma->rx.dma_ch;
++
++    UART_DBG("RX DMA REQUEST ch = (%d:%d) \n", p->port.line,ch);
++
++    local_irq_save(flags);
++
++    p->dma->rx.priv = id;
++    p->dma->rx.callback_fn = rtn;
++
++    //DMA IRQ En
++    ast_uart_udma_write(ast_uart_udma_read(UART_RX_UDMA_IER) | (1 << ch),
++                        UART_RX_UDMA_IER);
++
++    local_irq_restore(flags);
++
++    return 0;
+ 
+-	return 0;
+ }
+-EXPORT_SYMBOL_GPL(serial8250_tx_dma);
+ 
+-int serial8250_rx_dma(struct uart_8250_port *p, unsigned int iir)
+-{
+-	struct uart_8250_dma		*dma = p->dma;
+-	struct dma_async_tx_descriptor	*desc;
+-	struct dma_tx_state		state;
+-	int				dma_status;
++EXPORT_SYMBOL(ast_uart_rx_udma_request);
+ 
+-	dma_status = dmaengine_tx_status(dma->rxchan, dma->rx_cookie, &state);
+ 
+-	switch (iir & 0x3f) {
+-	case UART_IIR_RLSI:
+-		/* 8250_core handles errors and break interrupts */
+-		return -EIO;
+-	case UART_IIR_RX_TIMEOUT:
+-		/*
+-		 * If RCVR FIFO trigger level was not reached, complete the
+-		 * transfer and let 8250_core copy the remaining data.
+-		 */
+-		if (dma_status == DMA_IN_PROGRESS) {
+-			dmaengine_pause(dma->rxchan);
+-			__dma_rx_complete(p);
+-		}
+-		return -ETIMEDOUT;
+-	default:
+-		break;
+-	}
++static int ast_uart_tx_udma_ctrl(struct uart_8250_port *p, enum ast_uart_chan_op op)
++{
++    unsigned long flags;
++    int ch = p->dma->tx.dma_ch;
++    UART_DBG("TX DMA CTRL [ch (%d:%d)] \n", p->port.line, ch);
++
++    local_irq_save(flags);
++
++    switch (op) {
++        case AST_UART_DMAOP_TRIGGER:
++            UART_DBG("Trigger \n");
++            p->dma->tx.enable = 1;
++            //set enable 
++            ast_uart_udma_write(ast_uart_udma_read(UART_TX_UDMA_EN) | (0x1 << ch), UART_TX_UDMA_EN);
++            break;
++        case AST_UART_DMAOP_STOP:
++            UART_DBG("STOP \n");
++            p->dma->tx.enable = 0;
++            //disable engine 
++            ast_uart_udma_write(ast_uart_udma_read(UART_TX_UDMA_EN) & ~(0x1 << ch), UART_TX_UDMA_EN);
++
++            //set reset 
++            ast_uart_udma_write(ast_uart_udma_read(UART_TX_UDMA_REST) | (0x1 << ch), UART_TX_UDMA_REST);
++            ast_uart_udma_write(ast_uart_udma_read(UART_TX_UDMA_REST) & ~(0x1 << ch), UART_TX_UDMA_REST);
++            break;
++        case AST_UART_DMAOP_PAUSE:
++            //disable engine
++            ast_uart_udma_write(ast_uart_udma_read(UART_TX_UDMA_EN) & ~(0x1 << ch), UART_TX_UDMA_EN);
++    }
++
++    local_irq_restore(flags);
++    return 0;
++}
+ 
+-	if (dma_status)
+-		return 0;
++static int ast_uart_tx_udma_enqueue(struct uart_8250_port *p)
++{
++    unsigned long flags;
++    int ch = p->dma->tx.dma_ch;
+ 
+-	desc = dmaengine_prep_slave_single(dma->rxchan, dma->rx_addr,
+-					   dma->rx_size, DMA_DEV_TO_MEM,
+-					   DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+-	if (!desc)
+-		return -EBUSY;
++    UART_DBG("ch = (%d:%d), rx buff = %x, len = %d \n", p->port.line, ch, p->dma->tx.dma_virt_addr, AST_UART_TX_DMA_BUFFER_SIZE_VAL);
+ 
+-	desc->callback = __dma_rx_complete;
+-	desc->callback_param = p;
++    local_irq_save(flags);
+ 
+-	dma->rx_cookie = dmaengine_submit(desc);
++    ast_uart_udma_write(p->dma->tx.dma_virt_addr, UART_TX_UDMA_ADDR(ch));
+ 
+-	dma_sync_single_for_device(dma->rxchan->device->dev, dma->rx_addr,
+-				   dma->rx_size, DMA_FROM_DEVICE);
++    ast_uart_udma_write(0, UART_TX_W_POINT(ch));
+ 
+-	dma_async_issue_pending(dma->rxchan);
++    local_irq_restore(flags);
+ 
+-	return 0;
++    return 0;
+ }
+-EXPORT_SYMBOL_GPL(serial8250_rx_dma);
+ 
+-int serial8250_request_dma(struct uart_8250_port *p)
++static int ast_uart_rx_udma_ctrl(struct uart_8250_port *p, enum ast_uart_chan_op op)
+ {
+-	struct uart_8250_dma	*dma = p->dma;
+-	dma_cap_mask_t		mask;
+-
+-	/* Default slave configuration parameters */
+-	dma->rxconf.direction		= DMA_DEV_TO_MEM;
+-	dma->rxconf.src_addr_width	= DMA_SLAVE_BUSWIDTH_1_BYTE;
+-	dma->rxconf.src_addr		= p->port.mapbase + UART_RX;
+-
+-	dma->txconf.direction		= DMA_MEM_TO_DEV;
+-	dma->txconf.dst_addr_width	= DMA_SLAVE_BUSWIDTH_1_BYTE;
+-	dma->txconf.dst_addr		= p->port.mapbase + UART_TX;
+-
+-	dma_cap_zero(mask);
+-	dma_cap_set(DMA_SLAVE, mask);
+-
+-	/* Get a channel for RX */
+-	dma->rxchan = dma_request_slave_channel_compat(mask,
+-						       dma->fn, dma->rx_param,
+-						       p->port.dev, "rx");
+-	if (!dma->rxchan)
+-		return -ENODEV;
+-
+-	dmaengine_slave_config(dma->rxchan, &dma->rxconf);
+-
+-	/* Get a channel for TX */
+-	dma->txchan = dma_request_slave_channel_compat(mask,
+-						       dma->fn, dma->tx_param,
+-						       p->port.dev, "tx");
+-	if (!dma->txchan) {
+-		dma_release_channel(dma->rxchan);
+-		return -ENODEV;
+-	}
+-
+-	dmaengine_slave_config(dma->txchan, &dma->txconf);
+-
+-	/* RX buffer */
+-	if (!dma->rx_size)
+-		dma->rx_size = PAGE_SIZE;
+-
+-	dma->rx_buf = dma_alloc_coherent(dma->rxchan->device->dev, dma->rx_size,
+-					&dma->rx_addr, GFP_KERNEL);
+-	if (!dma->rx_buf)
+-		goto err;
+-
+-	/* TX buffer */
+-	dma->tx_addr = dma_map_single(dma->txchan->device->dev,
+-					p->port.state->xmit.buf,
+-					UART_XMIT_SIZE,
+-					DMA_TO_DEVICE);
+-	if (dma_mapping_error(dma->txchan->device->dev, dma->tx_addr)) {
+-		dma_free_coherent(dma->rxchan->device->dev, dma->rx_size,
+-				  dma->rx_buf, dma->rx_addr);
+-		goto err;
+-	}
+-
+-	dev_dbg_ratelimited(p->port.dev, "got both dma channels\n");
+-
+-	return 0;
+-err:
+-	dma_release_channel(dma->rxchan);
+-	dma_release_channel(dma->txchan);
+-
+-	return -ENOMEM;
++    unsigned long flags;
++    int ch = p->dma->rx.dma_ch;
++    UART_DBG("RX DMA CTRL [ch %d] \n", ch);
++
++    local_irq_save(flags);
++
++    switch (op) {
++        case AST_UART_DMAOP_TRIGGER:
++            UART_DBG("Trigger \n");
++            p->dma->rx.enable = 1;
++            //set enable 
++            ast_uart_udma_write(ast_uart_udma_read(UART_RX_UDMA_EN) | (0x1 << ch), UART_RX_UDMA_EN);
++            break;
++        case AST_UART_DMAOP_STOP:
++            //disable engine 
++            UART_DBG("STOP \n");
++            p->dma->rx.enable = 0;
++            ast_uart_udma_write(ast_uart_udma_read(UART_RX_UDMA_EN) & ~(0x1 << ch), UART_RX_UDMA_EN);
++
++            //set reset 
++            ast_uart_udma_write(ast_uart_udma_read(UART_RX_UDMA_REST) | (0x1 << ch), UART_RX_UDMA_REST);
++            ast_uart_udma_write(ast_uart_udma_read(UART_RX_UDMA_REST) & ~(0x1 << ch), UART_RX_UDMA_REST);
++            break;
++        case AST_UART_DMAOP_PAUSE:
++            //disable engine
++            ast_uart_udma_write(ast_uart_udma_read(UART_RX_UDMA_EN) & ~(0x1 << ch), UART_RX_UDMA_EN);
++            break;
++    }
++
++    local_irq_restore(flags);
++    return 0;
+ }
+-EXPORT_SYMBOL_GPL(serial8250_request_dma);
+ 
+-void serial8250_release_dma(struct uart_8250_port *p)
++static int ast_uart_rx_udma_enqueue(struct uart_8250_port *p)
+ {
+-	struct uart_8250_dma *dma = p->dma;
++    unsigned long flags;
++    int ch = p->dma->rx.dma_ch;
+ 
+-	if (!dma)
+-		return;
++    UART_DBG("ch = %d, rx buff = %x, len = %d \n", ch, p->dma->rx.dma_virt_addr, AST_UART_RX_DMA_BUFFER_SIZE_VAL);
+ 
+-	/* Release RX resources */
+-	dmaengine_terminate_all(dma->rxchan);
+-	dma_free_coherent(dma->rxchan->device->dev, dma->rx_size, dma->rx_buf,
+-			  dma->rx_addr);
+-	dma_release_channel(dma->rxchan);
+-	dma->rxchan = NULL;
++    local_irq_save(flags);
+ 
+-	/* Release TX resources */
+-	dmaengine_terminate_all(dma->txchan);
+-	dma_unmap_single(dma->txchan->device->dev, dma->tx_addr,
+-			 UART_XMIT_SIZE, DMA_TO_DEVICE);
+-	dma_release_channel(dma->txchan);
+-	dma->txchan = NULL;
+-	dma->tx_running = 0;
++    ast_uart_udma_write(p->dma->rx.dma_virt_addr, UART_RX_UDMA_ADDR(ch));
+ 
+-	dev_dbg_ratelimited(p->port.dev, "dma channels released\n");
++    local_irq_restore(flags);
++
++    return 0;
+ }
+-EXPORT_SYMBOL_GPL(serial8250_release_dma);
++
++int serial8250_dma_config(struct uart_8250_port *p)
++{
++    struct uart_8250_dma *dma=NULL;
++    int ch = p->port.line;
++
++    if (ch == 4) {
++        p->dma = NULL;
++        //Select UART5 as BMC Console
++        return -EPERM;
++    }
++
++    dma = kmalloc(sizeof(struct uart_8250_dma), GFP_KERNEL);
++    if (!dma)
++        return -ENOMEM;
++
++    dma->rx.enable = 0;
++    dma->rx.dma_ch=dma_count;
++
++    dma->tx.enable = 0;
++    dma->tx.dma_ch=dma_count;
++    dma_count++;
++    p->dma = dma;
++    ast_uart_rx_udma_ctrl(p, AST_UART_DMAOP_STOP);
++    ast_uart_tx_udma_ctrl(p, AST_UART_DMAOP_STOP);
++    return 0;
++}
++EXPORT_SYMBOL_GPL(serial8250_dma_config);
+-- 
+1.9.1
+

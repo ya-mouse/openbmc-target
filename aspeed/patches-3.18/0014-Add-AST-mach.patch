@@ -1,0 +1,4913 @@
+From 516ef4dbbf916ae36ef53367930330c245b27239 Mon Sep 17 00:00:00 2001
+From: "Anton D. Kachalov" <mouse@yandex-team.ru>
+Date: Tue, 24 May 2016 19:41:24 +0300
+Subject: [PATCH 14/14] Add AST mach
+
+Signed-off-by: Anton D. Kachalov <mouse@yandex-team.ru>
+---
+ arch/arm/Kconfig                                   |   41 +-
+ arch/arm/Makefile                                  |    1 +
+ arch/arm/boot/compressed/head.S                    |    7 +
+ arch/arm/configs/ast2400evb_defconfig              | 2201 ++++++++++++++++++++
+ arch/arm/include/asm/glue-cache.h                  |    2 +-
+ arch/arm/include/asm/serial.h                      |    9 +
+ arch/arm/include/asm/soc-ast/hwdef.h               |  198 ++
+ arch/arm/include/asm/soc-ast/hwmap.h               |  534 +++++
+ arch/arm/include/asm/soc-ast/hwreg.h               |  274 +++
+ arch/arm/include/uapi/asm/setup.h                  |   25 +
+ arch/arm/kernel/atags_parse.c                      |   35 +
+ arch/arm/mach-astevb/Makefile                      |    9 +
+ arch/arm/mach-astevb/Makefile.boot                 |    4 +
+ arch/arm/mach-astevb/include/mach/astmacdef.h      |   31 +
+ arch/arm/mach-astevb/include/mach/bits.h           |   61 +
+ arch/arm/mach-astevb/include/mach/debug-macro.S    |   41 +
+ arch/arm/mach-astevb/include/mach/dma.h            |   27 +
+ arch/arm/mach-astevb/include/mach/entry-macro.S    |   79 +
+ arch/arm/mach-astevb/include/mach/hardware.h       |   48 +
+ arch/arm/mach-astevb/include/mach/io.h             |   20 +
+ arch/arm/mach-astevb/include/mach/irqs.h           |   29 +
+ .../arm/mach-astevb/include/mach/lowlevel_serial.h |   26 +
+ arch/arm/mach-astevb/include/mach/memory.h         |   38 +
+ arch/arm/mach-astevb/include/mach/param.h          |   20 +
+ arch/arm/mach-astevb/include/mach/platform.h       |   33 +
+ arch/arm/mach-astevb/include/mach/serial.h         |   54 +
+ arch/arm/mach-astevb/include/mach/system.h         |   84 +
+ arch/arm/mach-astevb/include/mach/timex.h          |   25 +
+ arch/arm/mach-astevb/include/mach/uncompress.h     |   63 +
+ arch/arm/mach-astevb/include/mach/vmalloc.h        |   20 +
+ arch/arm/mach-astevb/irq.c                         |    1 +
+ arch/arm/mach-astevb/setup.c                       |  287 +++
+ arch/arm/mach-astevb/time.c                        |    1 +
+ arch/arm/mm/Kconfig                                |    3 +-
+ arch/arm/soc-ast/ast-irq.c                         |   96 +
+ arch/arm/soc-ast/ast-time.c                        |  124 ++
+ arch/arm/tools/mach-types                          |    4 +-
+ 37 files changed, 4550 insertions(+), 5 deletions(-)
+ create mode 100644 arch/arm/configs/ast2400evb_defconfig
+ create mode 100644 arch/arm/include/asm/serial.h
+ create mode 100644 arch/arm/include/asm/soc-ast/hwdef.h
+ create mode 100644 arch/arm/include/asm/soc-ast/hwmap.h
+ create mode 100644 arch/arm/include/asm/soc-ast/hwreg.h
+ create mode 100644 arch/arm/mach-astevb/Makefile
+ create mode 100644 arch/arm/mach-astevb/Makefile.boot
+ create mode 100644 arch/arm/mach-astevb/include/mach/astmacdef.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/bits.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/debug-macro.S
+ create mode 100644 arch/arm/mach-astevb/include/mach/dma.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/entry-macro.S
+ create mode 100644 arch/arm/mach-astevb/include/mach/hardware.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/io.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/irqs.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/lowlevel_serial.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/memory.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/param.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/platform.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/serial.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/system.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/timex.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/uncompress.h
+ create mode 100644 arch/arm/mach-astevb/include/mach/vmalloc.h
+ create mode 100644 arch/arm/mach-astevb/irq.c
+ create mode 100644 arch/arm/mach-astevb/setup.c
+ create mode 100644 arch/arm/mach-astevb/time.c
+ create mode 100644 arch/arm/soc-ast/ast-irq.c
+ create mode 100644 arch/arm/soc-ast/ast-time.c
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index 89c4b5c..1c176a0 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -302,8 +302,17 @@ config MMU
+ #
+ choice
+ 	prompt "ARM system type"
+-	default ARCH_VERSATILE if !MMU
+-	default ARCH_MULTIPLATFORM if MMU
++	default ARCH_AST2400EVB
++
++config ARCH_AST2400EVB
++   bool "ASPEED A2400 Evaluation Board"
++   select SOC_AST2400
++   select NEED_MACH_IO_H
++   help
++     This is an evaluation board from ASPEED based on AST2400 SOC
++     If you would like to build your kernel to run on one of these boards
++     then you must say 'Y' here. Otherwise say 'N'
++
+ 
+ config ARCH_MULTIPLATFORM
+ 	bool "Allow multiple platforms to be selected"
+@@ -788,6 +797,34 @@ config ARCH_OMAP1
+ 
+ endchoice
+ 
++# Define the SOC if any used here and sub components of the SOC here
++config SOC_AST2400
++   bool
++   select CPU_ARM926T
++   default y if ARCH_AST2400EVB
++
++config BASESOC_AST
++   bool
++   default y if SOC_AST2400
++
++config ASTSERIAL
++   bool "Aspeed Serial support"
++   depends on BASESOC_AST
++   default y if BASESOC_AST
++
++config UART_CLK
++   int "UART Clock in Hz"
++   depends on BASESOC_AST
++   default "24000000"
++
++config TIMER_CLK
++   int "TIMER Clock in Hz"
++   depends on BASESOC_AST
++   default "50000000"
++
++#End of SOC components description
++
++
+ menu "Multiple platform selection"
+ 	depends on ARCH_MULTIPLATFORM
+ 
+diff --git a/arch/arm/Makefile b/arch/arm/Makefile
+index b5d7988..2e07d35 100644
+--- a/arch/arm/Makefile
++++ b/arch/arm/Makefile
+@@ -168,6 +168,7 @@ machine-$(CONFIG_ARCH_GEMINI)		+= gemini
+ machine-$(CONFIG_ARCH_HIGHBANK)		+= highbank
+ machine-$(CONFIG_ARCH_HISI)		+= hisi
+ machine-$(CONFIG_ARCH_INTEGRATOR)	+= integrator
++machine-$(CONFIG_ARCH_AST2400EVB)   += astevb
+ machine-$(CONFIG_ARCH_IOP13XX)		+= iop13xx
+ machine-$(CONFIG_ARCH_IOP32X)		+= iop32x
+ machine-$(CONFIG_ARCH_IOP33X)		+= iop33x
+diff --git a/arch/arm/boot/compressed/head.S b/arch/arm/boot/compressed/head.S
+index 68be901..f969d4e 100644
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -670,6 +670,13 @@ __setup_mmu:	sub	r3, r4, #16384		@ Page directory size
+ 		mov	pc, lr
+ ENDPROC(__setup_mmu)
+ 
++__armv4_no_cache:
++       orr     r0,r0,#0
++       orr     r0,r0,#0
++       mov     pc,lr
++       orr     r0,r0,#0
++       orr     r0,r0,#0
++
+ @ Enable unaligned access on v6, to allow better code generation
+ @ for the decompressor C code:
+ __armv6_mmu_cache_on:
+diff --git a/arch/arm/configs/ast2400evb_defconfig b/arch/arm/configs/ast2400evb_defconfig
+new file mode 100644
+index 0000000..bce5201
+--- /dev/null
++++ b/arch/arm/configs/ast2400evb_defconfig
+@@ -0,0 +1,2201 @@
++#
++# Automatically generated file; DO NOT EDIT.
++# Linux/arm 3.14.17-ami Kernel Configuration
++#
++CONFIG_ARM=y
++CONFIG_SYS_SUPPORTS_APM_EMULATION=y
++CONFIG_HAVE_PROC_CPU=y
++CONFIG_STACKTRACE_SUPPORT=y
++CONFIG_HAVE_LATENCYTOP_SUPPORT=y
++CONFIG_LOCKDEP_SUPPORT=y
++CONFIG_TRACE_IRQFLAGS_SUPPORT=y
++CONFIG_RWSEM_GENERIC_SPINLOCK=y
++CONFIG_GENERIC_HWEIGHT=y
++CONFIG_GENERIC_CALIBRATE_DELAY=y
++CONFIG_NEED_DMA_MAP_STATE=y
++CONFIG_VECTORS_BASE=0xffff0000
++CONFIG_ARM_PATCH_PHYS_VIRT=y
++CONFIG_NEED_MACH_IO_H=y
++CONFIG_GENERIC_BUG=y
++CONFIG_DEFCONFIG_LIST="/lib/modules/$UNAME_RELEASE/.config"
++CONFIG_IRQ_WORK=y
++CONFIG_BUILDTIME_EXTABLE_SORT=y
++
++#
++# General setup
++#
++CONFIG_BROKEN_ON_SMP=y
++CONFIG_INIT_ENV_ARG_LIMIT=32
++CONFIG_CROSS_COMPILE=""
++# CONFIG_COMPILE_TEST is not set
++CONFIG_LOCALVERSION=""
++# CONFIG_LOCALVERSION_AUTO is not set
++CONFIG_HAVE_KERNEL_GZIP=y
++CONFIG_HAVE_KERNEL_LZMA=y
++CONFIG_HAVE_KERNEL_XZ=y
++CONFIG_HAVE_KERNEL_LZO=y
++CONFIG_HAVE_KERNEL_LZ4=y
++CONFIG_KERNEL_GZIP=y
++# CONFIG_KERNEL_LZMA is not set
++# CONFIG_KERNEL_XZ is not set
++# CONFIG_KERNEL_LZO is not set
++# CONFIG_KERNEL_LZ4 is not set
++CONFIG_DEFAULT_HOSTNAME="(none)"
++# CONFIG_SWAP is not set
++CONFIG_SYSVIPC=y
++CONFIG_SYSVIPC_SYSCTL=y
++# CONFIG_POSIX_MQUEUE is not set
++# CONFIG_FHANDLE is not set
++# CONFIG_AUDIT is not set
++
++#
++# IRQ subsystem
++#
++CONFIG_GENERIC_IRQ_PROBE=y
++CONFIG_GENERIC_IRQ_SHOW=y
++CONFIG_HARDIRQS_SW_RESEND=y
++CONFIG_IRQ_FORCED_THREADING=y
++CONFIG_KTIME_SCALAR=y
++
++#
++# CPU/Task time and stats accounting
++#
++CONFIG_TICK_CPU_ACCOUNTING=y
++# CONFIG_VIRT_CPU_ACCOUNTING_GEN is not set
++# CONFIG_IRQ_TIME_ACCOUNTING is not set
++# CONFIG_BSD_PROCESS_ACCT is not set
++# CONFIG_TASKSTATS is not set
++
++#
++# RCU Subsystem
++#
++CONFIG_TINY_RCU=y
++# CONFIG_PREEMPT_RCU is not set
++# CONFIG_RCU_STALL_COMMON is not set
++# CONFIG_TREE_RCU_TRACE is not set
++CONFIG_IKCONFIG=y
++CONFIG_IKCONFIG_PROC=y
++CONFIG_LOG_BUF_SHIFT=14
++CONFIG_GENERIC_SCHED_CLOCK=y
++# CONFIG_CGROUPS is not set
++# CONFIG_CHECKPOINT_RESTORE is not set
++# CONFIG_NAMESPACES is not set
++# CONFIG_SCHED_AUTOGROUP is not set
++# CONFIG_SYSFS_DEPRECATED is not set
++# CONFIG_RELAY is not set
++CONFIG_BLK_DEV_INITRD=y
++CONFIG_INITRAMFS_SOURCE="initramfs/initramfs.lst"
++CONFIG_INITRAMFS_ROOT_UID=0
++CONFIG_INITRAMFS_ROOT_GID=0
++CONFIG_RD_GZIP=y
++# CONFIG_RD_BZIP2 is not set
++# CONFIG_RD_LZMA is not set
++# CONFIG_RD_XZ is not set
++# CONFIG_RD_LZO is not set
++# CONFIG_RD_LZ4 is not set
++# CONFIG_INITRAMFS_COMPRESSION_NONE is not set
++CONFIG_INITRAMFS_COMPRESSION_GZIP=y
++CONFIG_CC_OPTIMIZE_FOR_SIZE=y
++CONFIG_SYSCTL=y
++CONFIG_ANON_INODES=y
++CONFIG_HAVE_UID16=y
++CONFIG_EXPERT=y
++CONFIG_UID16=y
++CONFIG_SYSCTL_SYSCALL=y
++CONFIG_KALLSYMS=y
++CONFIG_KALLSYMS_ALL=y
++CONFIG_PRINTK=y
++CONFIG_BUG=y
++CONFIG_ELF_CORE=y
++CONFIG_BASE_FULL=y
++CONFIG_FUTEX=y
++CONFIG_EPOLL=y
++CONFIG_SIGNALFD=y
++CONFIG_TIMERFD=y
++CONFIG_EVENTFD=y
++CONFIG_SHMEM=y
++# CONFIG_ASHMEM is not set
++# CONFIG_AIO is not set
++CONFIG_EMBEDDED=y
++CONFIG_HAVE_PERF_EVENTS=y
++CONFIG_PERF_USE_VMALLOC=y
++
++#
++# Kernel Performance Events And Counters
++#
++# CONFIG_PERF_EVENTS is not set
++CONFIG_VM_EVENT_COUNTERS=y
++# CONFIG_SLUB_DEBUG is not set
++CONFIG_COMPAT_BRK=y
++# CONFIG_SLAB is not set
++CONFIG_SLUB=y
++# CONFIG_SLOB is not set
++# CONFIG_SYSTEM_TRUSTED_KEYRING is not set
++# CONFIG_PROFILING is not set
++CONFIG_HAVE_OPROFILE=y
++# CONFIG_KPROBES is not set
++# CONFIG_JUMP_LABEL is not set
++# CONFIG_HAVE_64BIT_ALIGNED_ACCESS is not set
++CONFIG_ARCH_USE_BUILTIN_BSWAP=y
++CONFIG_HAVE_KPROBES=y
++CONFIG_HAVE_KRETPROBES=y
++CONFIG_HAVE_ARCH_TRACEHOOK=y
++CONFIG_HAVE_DMA_ATTRS=y
++CONFIG_HAVE_DMA_CONTIGUOUS=y
++CONFIG_GENERIC_SMP_IDLE_THREAD=y
++CONFIG_GENERIC_IDLE_POLL_SETUP=y
++CONFIG_HAVE_REGS_AND_STACK_ACCESS_API=y
++CONFIG_HAVE_DMA_API_DEBUG=y
++CONFIG_HAVE_PERF_REGS=y
++CONFIG_HAVE_PERF_USER_STACK_DUMP=y
++CONFIG_HAVE_ARCH_JUMP_LABEL=y
++CONFIG_ARCH_WANT_IPC_PARSE_VERSION=y
++CONFIG_HAVE_ARCH_SECCOMP_FILTER=y
++CONFIG_HAVE_CC_STACKPROTECTOR=y
++CONFIG_CC_STACKPROTECTOR=y
++# CONFIG_CC_STACKPROTECTOR_NONE is not set
++CONFIG_CC_STACKPROTECTOR_REGULAR=y
++# CONFIG_CC_STACKPROTECTOR_STRONG is not set
++CONFIG_HAVE_CONTEXT_TRACKING=y
++CONFIG_HAVE_VIRT_CPU_ACCOUNTING_GEN=y
++CONFIG_HAVE_IRQ_TIME_ACCOUNTING=y
++CONFIG_MODULES_USE_ELF_REL=y
++CONFIG_CLONE_BACKWARDS=y
++CONFIG_OLD_SIGSUSPEND3=y
++CONFIG_OLD_SIGACTION=y
++
++#
++# GCOV-based kernel profiling
++#
++CONFIG_HAVE_GENERIC_DMA_COHERENT=y
++CONFIG_RT_MUTEXES=y
++CONFIG_BASE_SMALL=0
++CONFIG_MODULES=y
++# CONFIG_MODULE_FORCE_LOAD is not set
++CONFIG_MODULE_UNLOAD=y
++CONFIG_MODULE_FORCE_UNLOAD=y
++# CONFIG_MODVERSIONS is not set
++# CONFIG_MODULE_SRCVERSION_ALL is not set
++# CONFIG_MODULE_SIG is not set
++CONFIG_BLOCK=y
++CONFIG_LBDAF=y
++# CONFIG_BLK_DEV_BSG is not set
++# CONFIG_BLK_DEV_BSGLIB is not set
++# CONFIG_BLK_DEV_INTEGRITY is not set
++# CONFIG_BLK_CMDLINE_PARSER is not set
++
++#
++# Partition Types
++#
++CONFIG_PARTITION_ADVANCED=y
++# CONFIG_ACORN_PARTITION is not set
++# CONFIG_AIX_PARTITION is not set
++# CONFIG_OSF_PARTITION is not set
++# CONFIG_AMIGA_PARTITION is not set
++# CONFIG_ATARI_PARTITION is not set
++# CONFIG_MAC_PARTITION is not set
++CONFIG_MSDOS_PARTITION=y
++# CONFIG_BSD_DISKLABEL is not set
++# CONFIG_MINIX_SUBPARTITION is not set
++# CONFIG_SOLARIS_X86_PARTITION is not set
++# CONFIG_UNIXWARE_DISKLABEL is not set
++# CONFIG_LDM_PARTITION is not set
++# CONFIG_SGI_PARTITION is not set
++# CONFIG_ULTRIX_PARTITION is not set
++# CONFIG_SUN_PARTITION is not set
++# CONFIG_KARMA_PARTITION is not set
++CONFIG_EFI_PARTITION=y
++# CONFIG_SYSV68_PARTITION is not set
++# CONFIG_CMDLINE_PARTITION is not set
++
++#
++# IO Schedulers
++#
++CONFIG_IOSCHED_NOOP=y
++# CONFIG_IOSCHED_DEADLINE is not set
++# CONFIG_IOSCHED_CFQ is not set
++CONFIG_DEFAULT_NOOP=y
++CONFIG_DEFAULT_IOSCHED="noop"
++CONFIG_INLINE_SPIN_UNLOCK_IRQ=y
++CONFIG_INLINE_READ_UNLOCK=y
++CONFIG_INLINE_READ_UNLOCK_IRQ=y
++CONFIG_INLINE_WRITE_UNLOCK=y
++CONFIG_INLINE_WRITE_UNLOCK_IRQ=y
++CONFIG_ARCH_SUPPORTS_ATOMIC_RMW=y
++# CONFIG_FREEZER is not set
++
++#
++# System Type
++#
++CONFIG_MMU=y
++CONFIG_ARCH_AST2400EVB=y
++# CONFIG_ARCH_MULTIPLATFORM is not set
++# CONFIG_ARCH_INTEGRATOR is not set
++# CONFIG_ARCH_REALVIEW is not set
++# CONFIG_ARCH_VERSATILE is not set
++# CONFIG_ARCH_AT91 is not set
++# CONFIG_ARCH_CLPS711X is not set
++# CONFIG_ARCH_GEMINI is not set
++# CONFIG_ARCH_EBSA110 is not set
++# CONFIG_ARCH_EP93XX is not set
++# CONFIG_ARCH_FOOTBRIDGE is not set
++# CONFIG_ARCH_NETX is not set
++# CONFIG_ARCH_IOP13XX is not set
++# CONFIG_ARCH_IOP32X is not set
++# CONFIG_ARCH_IOP33X is not set
++# CONFIG_ARCH_IXP4XX is not set
++# CONFIG_ARCH_DOVE is not set
++# CONFIG_ARCH_KIRKWOOD is not set
++# CONFIG_ARCH_MV78XX0 is not set
++# CONFIG_ARCH_ORION5X is not set
++# CONFIG_ARCH_MMP is not set
++# CONFIG_ARCH_KS8695 is not set
++# CONFIG_ARCH_W90X900 is not set
++# CONFIG_ARCH_LPC32XX is not set
++# CONFIG_ARCH_PXA is not set
++# CONFIG_ARCH_MSM_NODT is not set
++# CONFIG_ARCH_SHMOBILE_LEGACY is not set
++# CONFIG_ARCH_RPC is not set
++# CONFIG_ARCH_SA1100 is not set
++# CONFIG_ARCH_S3C24XX is not set
++# CONFIG_ARCH_S3C64XX is not set
++# CONFIG_ARCH_S5P64X0 is not set
++# CONFIG_ARCH_S5PC100 is not set
++# CONFIG_ARCH_S5PV210 is not set
++# CONFIG_ARCH_EXYNOS is not set
++# CONFIG_ARCH_DAVINCI is not set
++# CONFIG_ARCH_OMAP1 is not set
++CONFIG_SOC_AST2400=y
++CONFIG_BASESOC_AST=y
++CONFIG_ASTMAC100=y
++CONFIG_ASTSERIAL=y
++CONFIG_AST_PHY_ADDR=11
++CONFIG_UART_CLK=24000000
++CONFIG_TIMER_CLK=50000000
++# CONFIG_PLAT_SPEAR is not set
++
++#
++# Processor Type
++#
++CONFIG_CPU_ARM926T=y
++CONFIG_CPU_32v5=y
++CONFIG_CPU_ABRT_EV5TJ=y
++CONFIG_CPU_PABRT_LEGACY=y
++CONFIG_CPU_CACHE_VIVT=y
++CONFIG_CPU_COPY_V4WB=y
++CONFIG_CPU_TLB_V4WBI=y
++CONFIG_CPU_CP15=y
++CONFIG_CPU_CP15_MMU=y
++CONFIG_CPU_USE_DOMAINS=y
++
++#
++# Processor Features
++#
++# CONFIG_ARCH_PHYS_ADDR_T_64BIT is not set
++# CONFIG_ARM_THUMB is not set
++# CONFIG_CPU_ICACHE_DISABLE is not set
++# CONFIG_CPU_DCACHE_DISABLE is not set
++# CONFIG_CPU_DCACHE_WRITETHROUGH is not set
++# CONFIG_CPU_CACHE_ROUND_ROBIN is not set
++CONFIG_NEED_KUSER_HELPERS=y
++CONFIG_KUSER_HELPERS=y
++# CONFIG_CACHE_L2X0 is not set
++CONFIG_ARM_L1_CACHE_SHIFT=5
++CONFIG_ARM_NR_BANKS=8
++
++#
++# Bus support
++#
++# CONFIG_PCI_SYSCALL is not set
++# CONFIG_PCCARD is not set
++
++#
++# Kernel Features
++#
++CONFIG_VMSPLIT_3G=y
++# CONFIG_VMSPLIT_2G is not set
++# CONFIG_VMSPLIT_1G is not set
++CONFIG_PAGE_OFFSET=0xC0000000
++CONFIG_ARCH_NR_GPIO=0
++# CONFIG_PREEMPT_NONE is not set
++CONFIG_PREEMPT_VOLUNTARY=y
++# CONFIG_PREEMPT is not set
++CONFIG_HZ_FIXED=0
++CONFIG_HZ_100=y
++# CONFIG_HZ_200 is not set
++# CONFIG_HZ_250 is not set
++# CONFIG_HZ_300 is not set
++# CONFIG_HZ_500 is not set
++# CONFIG_HZ_1000 is not set
++CONFIG_HZ=100
++# CONFIG_SCHED_HRTICK is not set
++CONFIG_AEABI=y
++# CONFIG_OABI_COMPAT is not set
++# CONFIG_ARCH_SPARSEMEM_DEFAULT is not set
++# CONFIG_ARCH_SELECT_MEMORY_MODEL is not set
++CONFIG_HAVE_ARCH_PFN_VALID=y
++# CONFIG_HIGHMEM is not set
++CONFIG_ARCH_WANT_GENERAL_HUGETLB=y
++CONFIG_BIGPHYS_AREA=y
++CONFIG_FLATMEM=y
++CONFIG_FLAT_NODE_MEM_MAP=y
++CONFIG_HAVE_MEMBLOCK=y
++CONFIG_NO_BOOTMEM=y
++# CONFIG_HAVE_BOOTMEM_INFO_NODE is not set
++CONFIG_PAGEFLAGS_EXTENDED=y
++CONFIG_SPLIT_PTLOCK_CPUS=999999
++# CONFIG_COMPACTION is not set
++# CONFIG_PHYS_ADDR_T_64BIT is not set
++CONFIG_ZONE_DMA_FLAG=0
++# CONFIG_KSM is not set
++CONFIG_DEFAULT_MMAP_MIN_ADDR=32768
++# CONFIG_CROSS_MEMORY_ATTACH is not set
++CONFIG_NEED_PER_CPU_KM=y
++# CONFIG_CLEANCACHE is not set
++# CONFIG_CMA is not set
++# CONFIG_ZBUD is not set
++# CONFIG_ZSMALLOC is not set
++CONFIG_FORCE_MAX_ZONEORDER=11
++CONFIG_ALIGNMENT_TRAP=y
++# CONFIG_UACCESS_WITH_MEMCPY is not set
++# CONFIG_SECCOMP is not set
++CONFIG_SWIOTLB=y
++CONFIG_IOMMU_HELPER=y
++
++#
++# Boot options
++#
++# CONFIG_USE_OF is not set
++CONFIG_ATAGS=y
++# CONFIG_DEPRECATED_PARAM_STRUCT is not set
++CONFIG_ZBOOT_ROM_TEXT=0x0
++CONFIG_ZBOOT_ROM_BSS=0x0
++CONFIG_CMDLINE="console=ttyS4,115200 root=/dev/ram0 ro rootfstype=cramfs"
++CONFIG_CMDLINE_FROM_BOOTLOADER=y
++# CONFIG_CMDLINE_EXTEND is not set
++# CONFIG_CMDLINE_FORCE is not set
++# CONFIG_XIP_KERNEL is not set
++# CONFIG_KEXEC is not set
++# CONFIG_CRASH_DUMP is not set
++# CONFIG_AUTO_ZRELADDR is not set
++
++#
++# CPU Power Management
++#
++
++#
++# CPU Idle
++#
++# CONFIG_CPU_IDLE is not set
++# CONFIG_ARCH_NEEDS_CPU_IDLE_COUPLED is not set
++
++#
++# Floating point emulation
++#
++
++#
++# At least one emulation must be selected
++#
++# CONFIG_VFP is not set
++
++#
++# Userspace binary formats
++#
++CONFIG_BINFMT_ELF=y
++CONFIG_ARCH_BINFMT_ELF_RANDOMIZE_PIE=y
++# CONFIG_CORE_DUMP_DEFAULT_ELF_HEADERS is not set
++CONFIG_BINFMT_SCRIPT=y
++# CONFIG_HAVE_AOUT is not set
++# CONFIG_BINFMT_MISC is not set
++CONFIG_COREDUMP=y
++
++#
++# Power management options
++#
++# CONFIG_SUSPEND is not set
++# CONFIG_PM_RUNTIME is not set
++CONFIG_ARCH_SUSPEND_POSSIBLE=y
++# CONFIG_ARM_CPU_SUSPEND is not set
++CONFIG_NET=y
++
++#
++# Networking options
++#
++CONFIG_PACKET=y
++# CONFIG_PACKET_DIAG is not set
++CONFIG_UNIX=y
++# CONFIG_UNIX_DIAG is not set
++CONFIG_XFRM=y
++CONFIG_XFRM_ALGO=y
++# CONFIG_XFRM_USER is not set
++# CONFIG_XFRM_SUB_POLICY is not set
++# CONFIG_XFRM_MIGRATE is not set
++# CONFIG_XFRM_STATISTICS is not set
++CONFIG_XFRM_IPCOMP=y
++# CONFIG_NET_KEY is not set
++CONFIG_INET=y
++CONFIG_IP_MULTICAST=y
++# CONFIG_IP_ADVANCED_ROUTER is not set
++CONFIG_IP_ROUTE_CLASSID=y
++CONFIG_IP_PNP=y
++CONFIG_IP_PNP_DHCP=y
++# CONFIG_IP_PNP_BOOTP is not set
++# CONFIG_IP_PNP_RARP is not set
++# CONFIG_NET_IPIP is not set
++# CONFIG_NET_IPGRE_DEMUX is not set
++CONFIG_NET_IP_TUNNEL=y
++# CONFIG_IP_MROUTE is not set
++CONFIG_SYN_COOKIES=y
++# CONFIG_INET_AH is not set
++# CONFIG_INET_ESP is not set
++# CONFIG_INET_IPCOMP is not set
++# CONFIG_INET_XFRM_TUNNEL is not set
++CONFIG_INET_TUNNEL=y
++# CONFIG_INET_XFRM_MODE_TRANSPORT is not set
++# CONFIG_INET_XFRM_MODE_TUNNEL is not set
++# CONFIG_INET_XFRM_MODE_BEET is not set
++# CONFIG_INET_LRO is not set
++CONFIG_INET_DIAG=y
++CONFIG_INET_TCP_DIAG=y
++# CONFIG_INET_UDP_DIAG is not set
++# CONFIG_TCP_CONG_ADVANCED is not set
++CONFIG_TCP_CONG_CUBIC=y
++CONFIG_DEFAULT_TCP_CONG="cubic"
++# CONFIG_TCP_MD5SIG is not set
++CONFIG_IPV6=y
++CONFIG_IPV6_ROUTER_PREF=y
++CONFIG_IPV6_ROUTE_INFO=y
++CONFIG_IPV6_OPTIMISTIC_DAD=y
++CONFIG_INET6_AH=y
++CONFIG_INET6_ESP=y
++CONFIG_INET6_IPCOMP=y
++# CONFIG_IPV6_MIP6 is not set
++CONFIG_INET6_XFRM_TUNNEL=y
++CONFIG_INET6_TUNNEL=y
++CONFIG_INET6_XFRM_MODE_TRANSPORT=y
++CONFIG_INET6_XFRM_MODE_TUNNEL=y
++CONFIG_INET6_XFRM_MODE_BEET=y
++CONFIG_INET6_XFRM_MODE_ROUTEOPTIMIZATION=y
++# CONFIG_IPV6_VTI is not set
++CONFIG_IPV6_SIT=y
++# CONFIG_IPV6_SIT_6RD is not set
++CONFIG_IPV6_NDISC_NODETYPE=y
++CONFIG_IPV6_TUNNEL=y
++# CONFIG_IPV6_GRE is not set
++# CONFIG_IPV6_MULTIPLE_TABLES is not set
++# CONFIG_IPV6_MROUTE is not set
++# CONFIG_NETWORK_SECMARK is not set
++# CONFIG_NETWORK_PHY_TIMESTAMPING is not set
++CONFIG_NETFILTER=y
++CONFIG_NETFILTER_DEBUG=y
++CONFIG_NETFILTER_ADVANCED=y
++
++#
++# Core Netfilter Configuration
++#
++CONFIG_NETFILTER_NETLINK=y
++CONFIG_NETFILTER_NETLINK_ACCT=y
++CONFIG_NETFILTER_NETLINK_QUEUE=y
++CONFIG_NETFILTER_NETLINK_LOG=y
++# CONFIG_NF_CONNTRACK is not set
++# CONFIG_NF_TABLES is not set
++CONFIG_NETFILTER_XTABLES=y
++
++#
++# Xtables combined modules
++#
++CONFIG_NETFILTER_XT_MARK=y
++
++#
++# Xtables targets
++#
++CONFIG_NETFILTER_XT_TARGET_CHECKSUM=y
++CONFIG_NETFILTER_XT_TARGET_CLASSIFY=y
++CONFIG_NETFILTER_XT_TARGET_DSCP=y
++CONFIG_NETFILTER_XT_TARGET_HL=y
++# CONFIG_NETFILTER_XT_TARGET_HMARK is not set
++CONFIG_NETFILTER_XT_TARGET_IDLETIMER=y
++CONFIG_NETFILTER_XT_TARGET_LOG=y
++CONFIG_NETFILTER_XT_TARGET_MARK=y
++CONFIG_NETFILTER_XT_TARGET_NFLOG=y
++CONFIG_NETFILTER_XT_TARGET_NFQUEUE=y
++CONFIG_NETFILTER_XT_TARGET_RATEEST=y
++CONFIG_NETFILTER_XT_TARGET_TEE=y
++# CONFIG_NETFILTER_XT_TARGET_TPROXY is not set
++CONFIG_NETFILTER_XT_TARGET_TRACE=y
++CONFIG_NETFILTER_XT_TARGET_TCPMSS=y
++# CONFIG_NETFILTER_XT_TARGET_TCPOPTSTRIP is not set
++
++#
++# Xtables matches
++#
++CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
++# CONFIG_NETFILTER_XT_MATCH_BPF is not set
++CONFIG_NETFILTER_XT_MATCH_COMMENT=y
++CONFIG_NETFILTER_XT_MATCH_CPU=y
++CONFIG_NETFILTER_XT_MATCH_DCCP=y
++CONFIG_NETFILTER_XT_MATCH_DEVGROUP=y
++CONFIG_NETFILTER_XT_MATCH_DSCP=y
++CONFIG_NETFILTER_XT_MATCH_ECN=y
++CONFIG_NETFILTER_XT_MATCH_ESP=y
++CONFIG_NETFILTER_XT_MATCH_HASHLIMIT=y
++CONFIG_NETFILTER_XT_MATCH_HL=y
++# CONFIG_NETFILTER_XT_MATCH_IPCOMP is not set
++CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
++# CONFIG_NETFILTER_XT_MATCH_L2TP is not set
++CONFIG_NETFILTER_XT_MATCH_LENGTH=y
++CONFIG_NETFILTER_XT_MATCH_LIMIT=y
++CONFIG_NETFILTER_XT_MATCH_MAC=y
++CONFIG_NETFILTER_XT_MATCH_MARK=y
++CONFIG_NETFILTER_XT_MATCH_MULTIPORT=y
++CONFIG_NETFILTER_XT_MATCH_NFACCT=y
++CONFIG_NETFILTER_XT_MATCH_OSF=y
++CONFIG_NETFILTER_XT_MATCH_OWNER=y
++CONFIG_NETFILTER_XT_MATCH_POLICY=y
++CONFIG_NETFILTER_XT_MATCH_PKTTYPE=y
++CONFIG_NETFILTER_XT_MATCH_QUOTA=y
++CONFIG_NETFILTER_XT_MATCH_RATEEST=y
++CONFIG_NETFILTER_XT_MATCH_REALM=y
++CONFIG_NETFILTER_XT_MATCH_RECENT=y
++# CONFIG_NETFILTER_XT_MATCH_SCTP is not set
++# CONFIG_NETFILTER_XT_MATCH_SOCKET is not set
++CONFIG_NETFILTER_XT_MATCH_STATISTIC=y
++CONFIG_NETFILTER_XT_MATCH_STRING=y
++CONFIG_NETFILTER_XT_MATCH_TCPMSS=y
++CONFIG_NETFILTER_XT_MATCH_TIME=y
++CONFIG_NETFILTER_XT_MATCH_U32=y
++# CONFIG_IP_SET is not set
++# CONFIG_IP_VS is not set
++
++#
++# IP: Netfilter Configuration
++#
++# CONFIG_NF_DEFRAG_IPV4 is not set
++CONFIG_IP_NF_IPTABLES=y
++CONFIG_IP_NF_MATCH_AH=y
++CONFIG_IP_NF_MATCH_ECN=y
++CONFIG_IP_NF_MATCH_RPFILTER=y
++CONFIG_IP_NF_MATCH_TTL=y
++CONFIG_IP_NF_FILTER=y
++CONFIG_IP_NF_TARGET_REJECT=y
++CONFIG_IP_NF_TARGET_ULOG=y
++CONFIG_IP_NF_MANGLE=y
++CONFIG_IP_NF_TARGET_ECN=y
++CONFIG_IP_NF_TARGET_TTL=y
++CONFIG_IP_NF_RAW=y
++CONFIG_IP_NF_ARPTABLES=y
++CONFIG_IP_NF_ARPFILTER=y
++CONFIG_IP_NF_ARP_MANGLE=y
++
++#
++# IPv6: Netfilter Configuration
++#
++# CONFIG_NF_DEFRAG_IPV6 is not set
++CONFIG_IP6_NF_IPTABLES=y
++CONFIG_IP6_NF_MATCH_AH=y
++CONFIG_IP6_NF_MATCH_EUI64=y
++CONFIG_IP6_NF_MATCH_FRAG=y
++CONFIG_IP6_NF_MATCH_OPTS=y
++CONFIG_IP6_NF_MATCH_HL=y
++CONFIG_IP6_NF_MATCH_IPV6HEADER=y
++CONFIG_IP6_NF_MATCH_MH=y
++CONFIG_IP6_NF_MATCH_RPFILTER=y
++CONFIG_IP6_NF_MATCH_RT=y
++# CONFIG_IP6_NF_TARGET_HL is not set
++CONFIG_IP6_NF_FILTER=y
++CONFIG_IP6_NF_TARGET_REJECT=y
++CONFIG_IP6_NF_MANGLE=y
++CONFIG_IP6_NF_RAW=y
++# CONFIG_IP_DCCP is not set
++# CONFIG_IP_SCTP is not set
++# CONFIG_RDS is not set
++# CONFIG_TIPC is not set
++# CONFIG_ATM is not set
++# CONFIG_L2TP is not set
++# CONFIG_BRIDGE is not set
++CONFIG_HAVE_NET_DSA=y
++CONFIG_VLAN_8021Q=y
++# CONFIG_VLAN_8021Q_GVRP is not set
++# CONFIG_VLAN_8021Q_MVRP is not set
++# CONFIG_DECNET is not set
++# CONFIG_LLC2 is not set
++# CONFIG_IPX is not set
++# CONFIG_ATALK is not set
++# CONFIG_X25 is not set
++# CONFIG_LAPB is not set
++# CONFIG_PHONET is not set
++# CONFIG_IEEE802154 is not set
++# CONFIG_NET_SCHED is not set
++# CONFIG_DCB is not set
++CONFIG_DNS_RESOLVER=y
++# CONFIG_BATMAN_ADV is not set
++# CONFIG_OPENVSWITCH is not set
++# CONFIG_VSOCKETS is not set
++# CONFIG_NETLINK_MMAP is not set
++# CONFIG_NETLINK_DIAG is not set
++# CONFIG_NET_MPLS_GSO is not set
++# CONFIG_HSR is not set
++CONFIG_NET_RX_BUSY_POLL=y
++CONFIG_BQL=y
++# CONFIG_BPF_JIT is not set
++
++#
++# Network testing
++#
++# CONFIG_NET_PKTGEN is not set
++# CONFIG_HAMRADIO is not set
++# CONFIG_CAN is not set
++# CONFIG_IRDA is not set
++# CONFIG_BT is not set
++# CONFIG_AF_RXRPC is not set
++CONFIG_WIRELESS=y
++CONFIG_WIRELESS_EXT=y
++CONFIG_WEXT_CORE=y
++CONFIG_WEXT_PROC=y
++CONFIG_WEXT_SPY=y
++CONFIG_WEXT_PRIV=y
++# CONFIG_CFG80211 is not set
++CONFIG_LIB80211=y
++CONFIG_LIB80211_CRYPT_WEP=y
++CONFIG_LIB80211_CRYPT_CCMP=y
++CONFIG_LIB80211_CRYPT_TKIP=y
++# CONFIG_LIB80211_DEBUG is not set
++
++#
++# CFG80211 needs to be enabled for MAC80211
++#
++# CONFIG_WIMAX is not set
++# CONFIG_RFKILL is not set
++# CONFIG_NET_9P is not set
++# CONFIG_CAIF is not set
++# CONFIG_CEPH_LIB is not set
++# CONFIG_NFC is not set
++CONFIG_HAVE_BPF_JIT=y
++
++#
++# Device Drivers
++#
++
++#
++# Generic Driver Options
++#
++CONFIG_UEVENT_HELPER_PATH="/sbin/hotplug"
++# CONFIG_DEVTMPFS is not set
++# CONFIG_STANDALONE is not set
++CONFIG_PREVENT_FIRMWARE_BUILD=y
++CONFIG_FW_LOADER=y
++CONFIG_FIRMWARE_IN_KERNEL=y
++CONFIG_EXTRA_FIRMWARE=""
++CONFIG_FW_LOADER_USER_HELPER=y
++# CONFIG_DEBUG_DRIVER is not set
++# CONFIG_DEBUG_DEVRES is not set
++# CONFIG_SYS_HYPERVISOR is not set
++# CONFIG_GENERIC_CPU_DEVICES is not set
++# CONFIG_DMA_SHARED_BUFFER is not set
++
++#
++# Bus devices
++#
++# CONFIG_ARM_CCI is not set
++# CONFIG_CONNECTOR is not set
++CONFIG_MTD=y
++# CONFIG_MTD_TESTS is not set
++# CONFIG_MTD_REDBOOT_PARTS is not set
++# CONFIG_MTD_CMDLINE_PARTS is not set
++# CONFIG_MTD_AFS_PARTS is not set
++# CONFIG_MTD_AR7_PARTS is not set
++
++#
++# User Modules And Translation Layers
++#
++CONFIG_MTD_BLKDEVS=y
++# CONFIG_MTD_BLOCK is not set
++CONFIG_MTD_BLOCK_RO=y
++# CONFIG_FTL is not set
++# CONFIG_NFTL is not set
++# CONFIG_INFTL is not set
++# CONFIG_RFD_FTL is not set
++# CONFIG_SSFDC is not set
++# CONFIG_SM_FTL is not set
++# CONFIG_MTD_OOPS is not set
++
++#
++# RAM/ROM/Flash chip drivers
++#
++# CONFIG_MTD_CFI is not set
++# CONFIG_MTD_JEDECPROBE is not set
++CONFIG_MTD_MAP_BANK_WIDTH_1=y
++CONFIG_MTD_MAP_BANK_WIDTH_2=y
++CONFIG_MTD_MAP_BANK_WIDTH_4=y
++# CONFIG_MTD_MAP_BANK_WIDTH_8 is not set
++# CONFIG_MTD_MAP_BANK_WIDTH_16 is not set
++# CONFIG_MTD_MAP_BANK_WIDTH_32 is not set
++CONFIG_MTD_CFI_I1=y
++CONFIG_MTD_CFI_I2=y
++# CONFIG_MTD_CFI_I4 is not set
++# CONFIG_MTD_CFI_I8 is not set
++# CONFIG_MTD_RAM is not set
++# CONFIG_MTD_ROM is not set
++# CONFIG_MTD_ABSENT is not set
++
++#
++# SPI Flash chip drivers
++#
++CONFIG_MTD_SPI=y
++CONFIG_MTD_SPI_SPANSION=y
++CONFIG_MTD_SPI_MACRONIX=y
++CONFIG_MTD_SPI_INTEL_S33=y
++CONFIG_MTD_SPI_WINBOND=y
++CONFIG_MTD_SPI_AT=y
++CONFIG_MTD_SPI_ST=y
++CONFIG_MTD_SPI_NUMONYX=y
++# CONFIG_MTD_SPI_DEFAULT is not set
++CONFIG_MTD_AST_SPI=y
++
++#
++# Mapping drivers for chip access
++#
++# CONFIG_MTD_COMPLEX_MAPPINGS is not set
++CONFIG_MTD_RACTRENDS=y
++# CONFIG_MTD_PLATRAM is not set
++
++#
++# Self-contained MTD device drivers
++#
++# CONFIG_MTD_SLRAM is not set
++# CONFIG_MTD_PHRAM is not set
++# CONFIG_MTD_MTDRAM is not set
++CONFIG_MTD_BLOCK2MTD=y
++
++#
++# Disk-On-Chip Device Drivers
++#
++# CONFIG_MTD_DOCG3 is not set
++# CONFIG_MTD_NAND is not set
++# CONFIG_MTD_ONENAND is not set
++
++#
++# LPDDR flash memory drivers
++#
++# CONFIG_MTD_LPDDR is not set
++# CONFIG_MTD_UBI is not set
++CONFIG_ARCH_MIGHT_HAVE_PC_PARPORT=y
++# CONFIG_PARPORT is not set
++CONFIG_BLK_DEV=y
++# CONFIG_BLK_DEV_NULL_BLK is not set
++# CONFIG_BLK_DEV_COW_COMMON is not set
++CONFIG_BLK_DEV_LOOP=y
++CONFIG_BLK_DEV_LOOP_MIN_COUNT=8
++# CONFIG_BLK_DEV_CRYPTOLOOP is not set
++# CONFIG_BLK_DEV_DRBD is not set
++# CONFIG_BLK_DEV_NBD is not set
++CONFIG_BLK_DEV_RAM=y
++CONFIG_BLK_DEV_RAM_COUNT=16
++CONFIG_BLK_DEV_RAM_SIZE=24576
++# CONFIG_BLK_DEV_XIP is not set
++# CONFIG_CDROM_PKTCDVD is not set
++# CONFIG_ATA_OVER_ETH is not set
++# CONFIG_BLK_DEV_RBD is not set
++
++#
++# Misc devices
++#
++# CONFIG_SENSORS_LIS3LV02D is not set
++# CONFIG_AD525X_DPOT is not set
++# CONFIG_DUMMY_IRQ is not set
++# CONFIG_ICS932S401 is not set
++# CONFIG_ATMEL_SSC is not set
++# CONFIG_ENCLOSURE_SERVICES is not set
++# CONFIG_APDS9802ALS is not set
++# CONFIG_ISL29003 is not set
++# CONFIG_ISL29020 is not set
++# CONFIG_SENSORS_TSL2550 is not set
++# CONFIG_SENSORS_BH1780 is not set
++# CONFIG_SENSORS_BH1770 is not set
++# CONFIG_SENSORS_APDS990X is not set
++# CONFIG_HMC6352 is not set
++# CONFIG_DS1682 is not set
++# CONFIG_BMP085_I2C is not set
++# CONFIG_USB_SWITCH_FSA9480 is not set
++# CONFIG_SRAM is not set
++# CONFIG_C2PORT is not set
++
++#
++# EEPROM support
++#
++# CONFIG_EEPROM_AT24 is not set
++# CONFIG_EEPROM_LEGACY is not set
++# CONFIG_EEPROM_MAX6875 is not set
++# CONFIG_EEPROM_93CX6 is not set
++
++#
++# Texas Instruments shared transport line discipline
++#
++# CONFIG_SENSORS_LIS3_I2C is not set
++
++#
++# Altera FPGA firmware download module
++#
++# CONFIG_ALTERA_STAPL is not set
++
++#
++# Intel MIC Host Driver
++#
++
++#
++# Intel MIC Card Driver
++#
++
++#
++# SCSI device support
++#
++CONFIG_SCSI_MOD=y
++# CONFIG_RAID_ATTRS is not set
++CONFIG_SCSI=y
++CONFIG_SCSI_DMA=y
++# CONFIG_SCSI_TGT is not set
++# CONFIG_SCSI_NETLINK is not set
++CONFIG_SCSI_PROC_FS=y
++
++#
++# SCSI support type (disk, tape, CD-ROM)
++#
++CONFIG_BLK_DEV_SD=y
++# CONFIG_CHR_DEV_ST is not set
++# CONFIG_CHR_DEV_OSST is not set
++CONFIG_BLK_DEV_SR=y
++CONFIG_BLK_DEV_SR_VENDOR=y
++CONFIG_CHR_DEV_SG=y
++# CONFIG_CHR_DEV_SCH is not set
++# CONFIG_SCSI_MULTI_LUN is not set
++# CONFIG_SCSI_CONSTANTS is not set
++# CONFIG_SCSI_LOGGING is not set
++# CONFIG_SCSI_SCAN_ASYNC is not set
++
++#
++# SCSI Transports
++#
++# CONFIG_SCSI_SPI_ATTRS is not set
++# CONFIG_SCSI_FC_ATTRS is not set
++# CONFIG_SCSI_ISCSI_ATTRS is not set
++# CONFIG_SCSI_SAS_ATTRS is not set
++# CONFIG_SCSI_SAS_LIBSAS is not set
++# CONFIG_SCSI_SRP_ATTRS is not set
++CONFIG_SCSI_LOWLEVEL=y
++# CONFIG_ISCSI_TCP is not set
++# CONFIG_ISCSI_BOOT_SYSFS is not set
++# CONFIG_SCSI_UFSHCD is not set
++# CONFIG_LIBFC is not set
++# CONFIG_LIBFCOE is not set
++# CONFIG_SCSI_DEBUG is not set
++# CONFIG_SCSI_DH is not set
++# CONFIG_SCSI_OSD_INITIATOR is not set
++# CONFIG_ATA is not set
++# CONFIG_MD is not set
++# CONFIG_TARGET_CORE is not set
++CONFIG_NETDEVICES=y
++CONFIG_NET_CORE=y
++CONFIG_BONDING=y
++# CONFIG_DUMMY is not set
++# CONFIG_EQUALIZER is not set
++# CONFIG_NET_TEAM is not set
++# CONFIG_MACVLAN is not set
++# CONFIG_VXLAN is not set
++# CONFIG_NETCONSOLE is not set
++# CONFIG_NETPOLL is not set
++# CONFIG_NET_POLL_CONTROLLER is not set
++# CONFIG_TUN is not set
++# CONFIG_VETH is not set
++# CONFIG_NLMON is not set
++
++#
++# CAIF transport drivers
++#
++
++#
++# Distributed Switch Architecture drivers
++#
++# CONFIG_NET_DSA_MV88E6XXX is not set
++# CONFIG_NET_DSA_MV88E6060 is not set
++# CONFIG_NET_DSA_MV88E6XXX_NEED_PPU is not set
++# CONFIG_NET_DSA_MV88E6131 is not set
++# CONFIG_NET_DSA_MV88E6123_61_65 is not set
++CONFIG_ETHERNET=y
++# CONFIG_NET_VENDOR_ARC is not set
++# CONFIG_NET_CADENCE is not set
++# CONFIG_NET_VENDOR_BROADCOM is not set
++# CONFIG_NET_CALXEDA_XGMAC is not set
++# CONFIG_NET_VENDOR_CIRRUS is not set
++# CONFIG_DM9000 is not set
++# CONFIG_DNET is not set
++# CONFIG_NET_VENDOR_FARADAY is not set
++# CONFIG_NET_VENDOR_INTEL is not set
++# CONFIG_NET_VENDOR_MARVELL is not set
++# CONFIG_NET_VENDOR_MICREL is not set
++# CONFIG_NET_VENDOR_NATSEMI is not set
++# CONFIG_ETHOC is not set
++# CONFIG_SH_ETH is not set
++# CONFIG_NET_VENDOR_SEEQ is not set
++# CONFIG_NET_VENDOR_SMSC is not set
++# CONFIG_NET_VENDOR_STMICRO is not set
++# CONFIG_NET_VENDOR_VIA is not set
++# CONFIG_NET_VENDOR_WIZNET is not set
++CONFIG_PHYLIB=y
++
++#
++# MII PHY device drivers
++#
++# CONFIG_AT803X_PHY is not set
++# CONFIG_AMD_PHY is not set
++# CONFIG_MARVELL_PHY is not set
++# CONFIG_DAVICOM_PHY is not set
++# CONFIG_QSEMI_PHY is not set
++# CONFIG_LXT_PHY is not set
++# CONFIG_CICADA_PHY is not set
++# CONFIG_VITESSE_PHY is not set
++# CONFIG_SMSC_PHY is not set
++# CONFIG_BROADCOM_PHY is not set
++# CONFIG_BCM87XX_PHY is not set
++# CONFIG_ICPLUS_PHY is not set
++# CONFIG_REALTEK_PHY is not set
++# CONFIG_NATIONAL_PHY is not set
++# CONFIG_STE10XP is not set
++# CONFIG_LSI_ET1011C_PHY is not set
++# CONFIG_MICREL_PHY is not set
++# CONFIG_FIXED_PHY is not set
++# CONFIG_MDIO_BITBANG is not set
++# CONFIG_PPP is not set
++# CONFIG_SLIP is not set
++
++#
++# USB Network Adapters
++#
++# CONFIG_USB_CATC is not set
++# CONFIG_USB_KAWETH is not set
++# CONFIG_USB_PEGASUS is not set
++# CONFIG_USB_RTL8150 is not set
++# CONFIG_USB_RTL8152 is not set
++# CONFIG_USB_USBNET is not set
++# CONFIG_USB_IPHETH is not set
++CONFIG_WLAN=y
++# CONFIG_USB_ZD1201 is not set
++CONFIG_HOSTAP=y
++# CONFIG_HOSTAP_FIRMWARE is not set
++# CONFIG_WL_TI is not set
++
++#
++# Enable WiMAX (Networking options) to see the WiMAX drivers
++#
++# CONFIG_WAN is not set
++# CONFIG_ISDN is not set
++
++#
++# Input device support
++#
++CONFIG_INPUT=y
++# CONFIG_INPUT_FF_MEMLESS is not set
++# CONFIG_INPUT_POLLDEV is not set
++# CONFIG_INPUT_SPARSEKMAP is not set
++# CONFIG_INPUT_MATRIXKMAP is not set
++
++#
++# Userland interfaces
++#
++CONFIG_INPUT_MOUSEDEV=y
++CONFIG_INPUT_MOUSEDEV_PSAUX=y
++CONFIG_INPUT_MOUSEDEV_SCREEN_X=1024
++CONFIG_INPUT_MOUSEDEV_SCREEN_Y=768
++# CONFIG_INPUT_JOYDEV is not set
++CONFIG_INPUT_EVDEV=y
++# CONFIG_INPUT_EVBUG is not set
++
++#
++# Input Device Drivers
++#
++CONFIG_INPUT_KEYBOARD=y
++# CONFIG_KEYBOARD_ADP5588 is not set
++# CONFIG_KEYBOARD_ADP5589 is not set
++CONFIG_KEYBOARD_ATKBD=y
++# CONFIG_KEYBOARD_QT1070 is not set
++# CONFIG_KEYBOARD_QT2160 is not set
++# CONFIG_KEYBOARD_LKKBD is not set
++# CONFIG_KEYBOARD_TCA6416 is not set
++# CONFIG_KEYBOARD_TCA8418 is not set
++# CONFIG_KEYBOARD_LM8333 is not set
++# CONFIG_KEYBOARD_MAX7359 is not set
++# CONFIG_KEYBOARD_MCS is not set
++# CONFIG_KEYBOARD_MPR121 is not set
++# CONFIG_KEYBOARD_NEWTON is not set
++# CONFIG_KEYBOARD_OPENCORES is not set
++# CONFIG_KEYBOARD_STOWAWAY is not set
++# CONFIG_KEYBOARD_SUNKBD is not set
++CONFIG_KEYBOARD_XTKBD=y
++CONFIG_INPUT_MOUSE=y
++CONFIG_MOUSE_PS2=y
++# CONFIG_MOUSE_PS2_ALPS is not set
++CONFIG_MOUSE_PS2_LOGIPS2PP=y
++# CONFIG_MOUSE_PS2_SYNAPTICS is not set
++# CONFIG_MOUSE_PS2_CYPRESS is not set
++# CONFIG_MOUSE_PS2_TRACKPOINT is not set
++# CONFIG_MOUSE_PS2_ELANTECH is not set
++# CONFIG_MOUSE_PS2_SENTELIC is not set
++# CONFIG_MOUSE_PS2_TOUCHKIT is not set
++CONFIG_MOUSE_SERIAL=y
++# CONFIG_MOUSE_APPLETOUCH is not set
++# CONFIG_MOUSE_BCM5974 is not set
++# CONFIG_MOUSE_CYAPA is not set
++# CONFIG_MOUSE_VSXXXAA is not set
++# CONFIG_MOUSE_SYNAPTICS_I2C is not set
++# CONFIG_MOUSE_SYNAPTICS_USB is not set
++# CONFIG_INPUT_JOYSTICK is not set
++# CONFIG_INPUT_TABLET is not set
++# CONFIG_INPUT_TOUCHSCREEN is not set
++# CONFIG_INPUT_MISC is not set
++
++#
++# Hardware I/O ports
++#
++CONFIG_SERIO=y
++CONFIG_SERIO_SERPORT=y
++CONFIG_SERIO_LIBPS2=y
++CONFIG_SERIO_RAW=y
++# CONFIG_SERIO_ALTERA_PS2 is not set
++# CONFIG_SERIO_PS2MULT is not set
++# CONFIG_SERIO_ARC_PS2 is not set
++# CONFIG_GAMEPORT is not set
++
++#
++# Character devices
++#
++CONFIG_TTY=y
++CONFIG_VT=y
++CONFIG_CONSOLE_TRANSLATIONS=y
++CONFIG_VT_CONSOLE=y
++CONFIG_HW_CONSOLE=y
++CONFIG_VT_HW_CONSOLE_BINDING=y
++CONFIG_UNIX98_PTYS=y
++CONFIG_DEVPTS_MULTIPLE_INSTANCES=y
++CONFIG_LEGACY_PTYS=y
++CONFIG_LEGACY_PTY_COUNT=16
++# CONFIG_SERIAL_NONSTANDARD is not set
++# CONFIG_N_GSM is not set
++# CONFIG_TRACE_SINK is not set
++CONFIG_DEVKMEM=y
++
++#
++# Serial drivers
++#
++CONFIG_SERIAL_8250=y
++CONFIG_SERIAL_8250_DEPRECATED_OPTIONS=y
++CONFIG_SERIAL_8250_CONSOLE=y
++CONFIG_SERIAL_8250_NR_UARTS=5
++CONFIG_SERIAL_8250_RUNTIME_UARTS=5
++# CONFIG_SERIAL_8250_EXTENDED is not set
++# CONFIG_SERIAL_8250_DW is not set
++
++#
++# Non-8250 serial port support
++#
++CONFIG_SERIAL_CORE=y
++CONFIG_SERIAL_CORE_CONSOLE=y
++# CONFIG_SERIAL_SCCNXP is not set
++# CONFIG_SERIAL_TIMBERDALE is not set
++# CONFIG_SERIAL_ALTERA_JTAGUART is not set
++# CONFIG_SERIAL_ALTERA_UART is not set
++# CONFIG_SERIAL_ARC is not set
++# CONFIG_SERIAL_FSL_LPUART is not set
++# CONFIG_SERIAL_ST_ASC is not set
++CONFIG_TTY_PRINTK=y
++# CONFIG_HVC_DCC is not set
++# CONFIG_IPMI_HANDLER is not set
++# CONFIG_HW_RANDOM is not set
++# CONFIG_R3964 is not set
++# CONFIG_RAW_DRIVER is not set
++# CONFIG_TCG_TPM is not set
++CONFIG_I2C=y
++CONFIG_I2C_BOARDINFO=y
++# CONFIG_I2C_COMPAT is not set
++CONFIG_I2C_CHARDEV=y
++# CONFIG_I2C_MUX is not set
++# CONFIG_I2C_HELPER_AUTO is not set
++# CONFIG_I2C_SMBUS is not set
++
++#
++# I2C Algorithms
++#
++# CONFIG_I2C_ALGOBIT is not set
++# CONFIG_I2C_ALGOPCF is not set
++# CONFIG_I2C_ALGOPCA is not set
++
++#
++# I2C Hardware Bus support
++#
++
++#
++# I2C system bus drivers (mostly embedded / system-on-chip)
++#
++# CONFIG_I2C_DESIGNWARE_PLATFORM is not set
++# CONFIG_I2C_OCORES is not set
++# CONFIG_I2C_PCA_PLATFORM is not set
++# CONFIG_I2C_PXA_PCI is not set
++# CONFIG_I2C_SIMTEC is not set
++# CONFIG_I2C_XILINX is not set
++
++#
++# External I2C/SMBus adapter drivers
++#
++# CONFIG_I2C_DIOLAN_U2C is not set
++# CONFIG_I2C_PARPORT_LIGHT is not set
++# CONFIG_I2C_ROBOTFUZZ_OSIF is not set
++# CONFIG_I2C_TAOS_EVM is not set
++# CONFIG_I2C_TINY_USB is not set
++
++#
++# Other I2C/SMBus bus drivers
++#
++# CONFIG_I2C_STUB is not set
++# CONFIG_I2C_DEBUG_CORE is not set
++# CONFIG_I2C_DEBUG_ALGO is not set
++# CONFIG_I2C_DEBUG_BUS is not set
++# CONFIG_SPI is not set
++# CONFIG_HSI is not set
++
++#
++# PPS support
++#
++# CONFIG_PPS is not set
++
++#
++# PPS generators support
++#
++
++#
++# PTP clock support
++#
++# CONFIG_PTP_1588_CLOCK is not set
++
++#
++# Enable PHYLIB and NETWORK_PHY_TIMESTAMPING to see the additional clocks.
++#
++CONFIG_ARCH_HAVE_CUSTOM_GPIO_H=y
++# CONFIG_W1 is not set
++# CONFIG_POWER_SUPPLY is not set
++# CONFIG_POWER_AVS is not set
++# CONFIG_HWMON is not set
++# CONFIG_THERMAL is not set
++# CONFIG_WATCHDOG is not set
++CONFIG_SSB_POSSIBLE=y
++
++#
++# Sonics Silicon Backplane
++#
++# CONFIG_SSB is not set
++CONFIG_BCMA_POSSIBLE=y
++
++#
++# Broadcom specific AMBA
++#
++# CONFIG_BCMA is not set
++
++#
++# Multifunction device drivers
++#
++# CONFIG_MFD_CORE is not set
++# CONFIG_MFD_AS3711 is not set
++# CONFIG_PMIC_ADP5520 is not set
++# CONFIG_MFD_CROS_EC is not set
++# CONFIG_PMIC_DA903X is not set
++# CONFIG_MFD_DA9052_I2C is not set
++# CONFIG_MFD_DA9055 is not set
++# CONFIG_MFD_DA9063 is not set
++# CONFIG_MFD_MC13XXX_I2C is not set
++# CONFIG_HTC_PASIC3 is not set
++# CONFIG_MFD_KEMPLD is not set
++# CONFIG_MFD_88PM800 is not set
++# CONFIG_MFD_88PM805 is not set
++# CONFIG_MFD_88PM860X is not set
++# CONFIG_MFD_MAX14577 is not set
++# CONFIG_MFD_MAX77686 is not set
++# CONFIG_MFD_MAX77693 is not set
++# CONFIG_MFD_MAX8907 is not set
++# CONFIG_MFD_MAX8925 is not set
++# CONFIG_MFD_MAX8997 is not set
++# CONFIG_MFD_MAX8998 is not set
++# CONFIG_MFD_VIPERBOARD is not set
++# CONFIG_MFD_RETU is not set
++# CONFIG_MFD_PCF50633 is not set
++# CONFIG_MFD_RC5T583 is not set
++# CONFIG_MFD_SEC_CORE is not set
++# CONFIG_MFD_SI476X_CORE is not set
++# CONFIG_MFD_SM501 is not set
++# CONFIG_MFD_SMSC is not set
++# CONFIG_ABX500_CORE is not set
++# CONFIG_MFD_STMPE is not set
++# CONFIG_MFD_SYSCON is not set
++# CONFIG_MFD_TI_AM335X_TSCADC is not set
++# CONFIG_MFD_LP3943 is not set
++# CONFIG_MFD_LP8788 is not set
++# CONFIG_MFD_PALMAS is not set
++# CONFIG_TPS6105X is not set
++# CONFIG_TPS6507X is not set
++# CONFIG_MFD_TPS65090 is not set
++# CONFIG_MFD_TPS65217 is not set
++# CONFIG_MFD_TPS6586X is not set
++# CONFIG_MFD_TPS80031 is not set
++# CONFIG_TWL4030_CORE is not set
++# CONFIG_TWL6040_CORE is not set
++# CONFIG_MFD_WL1273_CORE is not set
++# CONFIG_MFD_LM3533 is not set
++# CONFIG_MFD_TC3589X is not set
++# CONFIG_MFD_TMIO is not set
++# CONFIG_MFD_ARIZONA_I2C is not set
++# CONFIG_MFD_WM8400 is not set
++# CONFIG_MFD_WM831X_I2C is not set
++# CONFIG_MFD_WM8350_I2C is not set
++# CONFIG_MFD_WM8994 is not set
++# CONFIG_VEXPRESS_CONFIG is not set
++# CONFIG_REGULATOR is not set
++# CONFIG_MEDIA_SUPPORT is not set
++
++#
++# Graphics support
++#
++# CONFIG_DRM is not set
++# CONFIG_VGASTATE is not set
++# CONFIG_VIDEO_OUTPUT_CONTROL is not set
++CONFIG_FB=y
++# CONFIG_FIRMWARE_EDID is not set
++# CONFIG_FB_DDC is not set
++# CONFIG_FB_BOOT_VESA_SUPPORT is not set
++CONFIG_FB_CFB_FILLRECT=y
++CONFIG_FB_CFB_COPYAREA=y
++CONFIG_FB_CFB_IMAGEBLIT=y
++# CONFIG_FB_CFB_REV_PIXELS_IN_BYTE is not set
++# CONFIG_FB_SYS_FILLRECT is not set
++# CONFIG_FB_SYS_COPYAREA is not set
++# CONFIG_FB_SYS_IMAGEBLIT is not set
++# CONFIG_FB_FOREIGN_ENDIAN is not set
++# CONFIG_FB_SYS_FOPS is not set
++# CONFIG_FB_SVGALIB is not set
++# CONFIG_FB_MACMODES is not set
++# CONFIG_FB_BACKLIGHT is not set
++# CONFIG_FB_MODE_HELPERS is not set
++# CONFIG_FB_TILEBLITTING is not set
++
++#
++# Frame buffer hardware drivers
++#
++# CONFIG_FB_OPENCORES is not set
++# CONFIG_FB_S1D13XXX is not set
++CONFIG_FB_AST=y
++# CONFIG_FB_SMSCUFX is not set
++# CONFIG_FB_UDL is not set
++# CONFIG_FB_GOLDFISH is not set
++# CONFIG_FB_VIRTUAL is not set
++# CONFIG_FB_METRONOME is not set
++# CONFIG_FB_BROADSHEET is not set
++# CONFIG_FB_AUO_K190X is not set
++# CONFIG_FB_SIMPLE is not set
++# CONFIG_EXYNOS_VIDEO is not set
++# CONFIG_BACKLIGHT_LCD_SUPPORT is not set
++
++#
++# Console display driver support
++#
++CONFIG_DUMMY_CONSOLE=y
++CONFIG_FRAMEBUFFER_CONSOLE=y
++CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
++CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
++CONFIG_LOGO=y
++# CONFIG_LOGO_LINUX_MONO is not set
++# CONFIG_LOGO_LINUX_VGA16 is not set
++CONFIG_LOGO_LINUX_CLUT224=y
++CONFIG_SOUND=y
++# CONFIG_SOUND_OSS_CORE is not set
++CONFIG_SND=y
++# CONFIG_SND_SEQUENCER is not set
++# CONFIG_SND_MIXER_OSS is not set
++# CONFIG_SND_PCM_OSS is not set
++# CONFIG_SND_DYNAMIC_MINORS is not set
++CONFIG_SND_SUPPORT_OLD_API=y
++CONFIG_SND_VERBOSE_PROCFS=y
++# CONFIG_SND_VERBOSE_PRINTK is not set
++# CONFIG_SND_DEBUG is not set
++# CONFIG_SND_RAWMIDI_SEQ is not set
++# CONFIG_SND_OPL3_LIB_SEQ is not set
++# CONFIG_SND_OPL4_LIB_SEQ is not set
++# CONFIG_SND_SBAWE_SEQ is not set
++# CONFIG_SND_EMU10K1_SEQ is not set
++CONFIG_SND_DRIVERS=y
++# CONFIG_SND_DUMMY is not set
++# CONFIG_SND_ALOOP is not set
++# CONFIG_SND_MTPAV is not set
++# CONFIG_SND_SERIAL_U16550 is not set
++# CONFIG_SND_MPU401 is not set
++CONFIG_SND_ARM=y
++CONFIG_SND_USB=y
++# CONFIG_SND_USB_AUDIO is not set
++# CONFIG_SND_USB_UA101 is not set
++# CONFIG_SND_USB_CAIAQ is not set
++# CONFIG_SND_USB_6FIRE is not set
++# CONFIG_SND_USB_HIFACE is not set
++# CONFIG_SND_SOC is not set
++# CONFIG_SOUND_PRIME is not set
++
++#
++# HID support
++#
++CONFIG_HID=y
++# CONFIG_HIDRAW is not set
++# CONFIG_UHID is not set
++CONFIG_HID_GENERIC=y
++
++#
++# Special HID drivers
++#
++# CONFIG_HID_A4TECH is not set
++# CONFIG_HID_ACRUX is not set
++# CONFIG_HID_APPLE is not set
++# CONFIG_HID_APPLEIR is not set
++# CONFIG_HID_AUREAL is not set
++# CONFIG_HID_BELKIN is not set
++# CONFIG_HID_CHERRY is not set
++# CONFIG_HID_CHICONY is not set
++# CONFIG_HID_PRODIKEYS is not set
++# CONFIG_HID_CYPRESS is not set
++# CONFIG_HID_DRAGONRISE is not set
++# CONFIG_HID_EMS_FF is not set
++# CONFIG_HID_ELECOM is not set
++# CONFIG_HID_ELO is not set
++# CONFIG_HID_EZKEY is not set
++# CONFIG_HID_HOLTEK is not set
++# CONFIG_HID_HUION is not set
++# CONFIG_HID_KEYTOUCH is not set
++# CONFIG_HID_KYE is not set
++# CONFIG_HID_UCLOGIC is not set
++# CONFIG_HID_WALTOP is not set
++# CONFIG_HID_GYRATION is not set
++# CONFIG_HID_ICADE is not set
++# CONFIG_HID_TWINHAN is not set
++# CONFIG_HID_KENSINGTON is not set
++# CONFIG_HID_LCPOWER is not set
++# CONFIG_HID_LENOVO_TPKBD is not set
++# CONFIG_HID_LOGITECH is not set
++# CONFIG_HID_MAGICMOUSE is not set
++# CONFIG_HID_MICROSOFT is not set
++# CONFIG_HID_MONTEREY is not set
++# CONFIG_HID_MULTITOUCH is not set
++# CONFIG_HID_NTRIG is not set
++# CONFIG_HID_ORTEK is not set
++# CONFIG_HID_PANTHERLORD is not set
++# CONFIG_HID_PETALYNX is not set
++# CONFIG_HID_PICOLCD is not set
++# CONFIG_HID_PRIMAX is not set
++# CONFIG_HID_ROCCAT is not set
++# CONFIG_HID_SAITEK is not set
++# CONFIG_HID_SAMSUNG is not set
++# CONFIG_HID_SPEEDLINK is not set
++# CONFIG_HID_STEELSERIES is not set
++# CONFIG_HID_SUNPLUS is not set
++# CONFIG_HID_GREENASIA is not set
++# CONFIG_HID_SMARTJOYPLUS is not set
++# CONFIG_HID_TIVO is not set
++# CONFIG_HID_TOPSEED is not set
++# CONFIG_HID_THRUSTMASTER is not set
++# CONFIG_HID_XINMO is not set
++# CONFIG_HID_ZEROPLUS is not set
++# CONFIG_HID_ZYDACRON is not set
++# CONFIG_HID_SENSOR_HUB is not set
++
++#
++# USB HID support
++#
++CONFIG_USB_HID=y
++# CONFIG_HID_PID is not set
++# CONFIG_USB_HIDDEV is not set
++
++#
++# I2C HID support
++#
++# CONFIG_I2C_HID is not set
++CONFIG_USB_OHCI_LITTLE_ENDIAN=y
++CONFIG_USB_SUPPORT=y
++CONFIG_USB_COMMON=y
++CONFIG_USB_ARCH_HAS_HCD=y
++CONFIG_USB=y
++# CONFIG_USB_DEBUG is not set
++CONFIG_USB_ANNOUNCE_NEW_DEVICES=y
++
++#
++# Miscellaneous USB options
++#
++# CONFIG_USB_DEFAULT_PERSIST is not set
++# CONFIG_USB_DYNAMIC_MINORS is not set
++# CONFIG_USB_OTG_WHITELIST is not set
++# CONFIG_USB_OTG_BLACKLIST_HUB is not set
++# CONFIG_USB_MON is not set
++# CONFIG_USB_WUSB_CBAF is not set
++
++#
++# USB Host Controller Drivers
++#
++# CONFIG_USB_C67X00_HCD is not set
++# CONFIG_USB_XHCI_HCD is not set
++# CONFIG_USB_EHCI_HCD is not set
++# CONFIG_USB_OXU210HP_HCD is not set
++# CONFIG_USB_ISP116X_HCD is not set
++# CONFIG_USB_ISP1760_HCD is not set
++# CONFIG_USB_ISP1362_HCD is not set
++# CONFIG_USB_FUSBH200_HCD is not set
++# CONFIG_USB_FOTG210_HCD is not set
++# CONFIG_USB_OHCI_HCD is not set
++# CONFIG_USB_SL811_HCD is not set
++# CONFIG_USB_R8A66597_HCD is not set
++# CONFIG_USB_HCD_TEST_MODE is not set
++
++#
++# USB Device Class drivers
++#
++# CONFIG_USB_ACM is not set
++# CONFIG_USB_PRINTER is not set
++# CONFIG_USB_WDM is not set
++# CONFIG_USB_TMC is not set
++
++#
++# NOTE: USB_STORAGE depends on SCSI but BLK_DEV_SD may
++#
++
++#
++# also be needed; see USB_STORAGE Help for more info
++#
++CONFIG_USB_STORAGE=y
++# CONFIG_USB_STORAGE_DEBUG is not set
++# CONFIG_USB_STORAGE_REALTEK is not set
++# CONFIG_USB_STORAGE_DATAFAB is not set
++# CONFIG_USB_STORAGE_FREECOM is not set
++# CONFIG_USB_STORAGE_ISD200 is not set
++# CONFIG_USB_STORAGE_USBAT is not set
++# CONFIG_USB_STORAGE_SDDR09 is not set
++# CONFIG_USB_STORAGE_SDDR55 is not set
++# CONFIG_USB_STORAGE_JUMPSHOT is not set
++# CONFIG_USB_STORAGE_ALAUDA is not set
++# CONFIG_USB_STORAGE_ONETOUCH is not set
++# CONFIG_USB_STORAGE_KARMA is not set
++# CONFIG_USB_STORAGE_CYPRESS_ATACB is not set
++# CONFIG_USB_STORAGE_ENE_UB6250 is not set
++
++#
++# USB Imaging devices
++#
++# CONFIG_USB_MDC800 is not set
++# CONFIG_USB_MICROTEK is not set
++# CONFIG_USB_MUSB_HDRC is not set
++# CONFIG_USB_DWC3 is not set
++# CONFIG_USB_DWC2 is not set
++
++#
++# USB port drivers
++#
++# CONFIG_USB_SERIAL is not set
++
++#
++# USB Miscellaneous drivers
++#
++# CONFIG_USB_EMI62 is not set
++# CONFIG_USB_EMI26 is not set
++# CONFIG_USB_ADUTUX is not set
++# CONFIG_USB_SEVSEG is not set
++# CONFIG_USB_RIO500 is not set
++# CONFIG_USB_LEGOTOWER is not set
++# CONFIG_USB_LCD is not set
++# CONFIG_USB_LED is not set
++# CONFIG_USB_CYPRESS_CY7C63 is not set
++# CONFIG_USB_CYTHERM is not set
++# CONFIG_USB_IDMOUSE is not set
++# CONFIG_USB_FTDI_ELAN is not set
++# CONFIG_USB_APPLEDISPLAY is not set
++# CONFIG_USB_LD is not set
++# CONFIG_USB_TRANCEVIBRATOR is not set
++# CONFIG_USB_IOWARRIOR is not set
++# CONFIG_USB_TEST is not set
++# CONFIG_USB_EHSET_TEST_FIXTURE is not set
++# CONFIG_USB_ISIGHTFW is not set
++# CONFIG_USB_YUREX is not set
++# CONFIG_USB_EZUSB_FX2 is not set
++# CONFIG_USB_HSIC_USB3503 is not set
++
++#
++# USB Physical Layer drivers
++#
++# CONFIG_USB_PHY is not set
++# CONFIG_USB_OTG_FSM is not set
++# CONFIG_NOP_USB_XCEIV is not set
++# CONFIG_AM335X_PHY_USB is not set
++# CONFIG_SAMSUNG_USB2PHY is not set
++# CONFIG_SAMSUNG_USB3PHY is not set
++# CONFIG_USB_ISP1301 is not set
++# CONFIG_USB_RCAR_PHY is not set
++# CONFIG_USB_ULPI is not set
++# CONFIG_USB_GADGET is not set
++CONFIG_MMC=y
++# CONFIG_MMC_DEBUG is not set
++# CONFIG_MMC_UNSAFE_RESUME is not set
++# CONFIG_MMC_CLKGATE is not set
++
++#
++# MMC/SD/SDIO Card Drivers
++#
++CONFIG_MMC_BLOCK=y
++CONFIG_MMC_BLOCK_MINORS=8
++CONFIG_MMC_BLOCK_BOUNCE=y
++# CONFIG_SDIO_UART is not set
++# CONFIG_MMC_TEST is not set
++
++#
++# MMC/SD/SDIO Host Controller Drivers
++#
++CONFIG_MMC_SDHCI=y
++# CONFIG_MMC_SDHCI_PLTFM is not set
++# CONFIG_MMC_DW is not set
++# CONFIG_MMC_VUB300 is not set
++# CONFIG_MMC_USHC is not set
++CONFIG_MMC_SDHCI_AST=y
++# CONFIG_MEMSTICK is not set
++# CONFIG_NEW_LEDS is not set
++# CONFIG_ACCESSIBILITY is not set
++# CONFIG_EDAC is not set
++CONFIG_RTC_LIB=y
++CONFIG_RTC_CLASS=y
++CONFIG_RTC_HCTOSYS=y
++CONFIG_RTC_SYSTOHC=y
++CONFIG_RTC_HCTOSYS_DEVICE="rtc0"
++# CONFIG_RTC_DEBUG is not set
++
++#
++# RTC interfaces
++#
++CONFIG_RTC_INTF_SYSFS=y
++CONFIG_RTC_INTF_PROC=y
++CONFIG_RTC_INTF_DEV=y
++# CONFIG_RTC_INTF_DEV_UIE_EMUL is not set
++# CONFIG_RTC_DRV_TEST is not set
++
++#
++# I2C RTC drivers
++#
++# CONFIG_RTC_DRV_DS1307 is not set
++# CONFIG_RTC_DRV_DS1374 is not set
++# CONFIG_RTC_DRV_DS1672 is not set
++# CONFIG_RTC_DRV_DS3232 is not set
++# CONFIG_RTC_DRV_MAX6900 is not set
++# CONFIG_RTC_DRV_RS5C372 is not set
++# CONFIG_RTC_DRV_ISL1208 is not set
++# CONFIG_RTC_DRV_ISL12022 is not set
++# CONFIG_RTC_DRV_ISL12057 is not set
++# CONFIG_RTC_DRV_X1205 is not set
++# CONFIG_RTC_DRV_PCF2127 is not set
++# CONFIG_RTC_DRV_PCF8523 is not set
++# CONFIG_RTC_DRV_PCF8563 is not set
++# CONFIG_RTC_DRV_PCF8583 is not set
++# CONFIG_RTC_DRV_M41T80 is not set
++# CONFIG_RTC_DRV_BQ32K is not set
++# CONFIG_RTC_DRV_S35390A is not set
++# CONFIG_RTC_DRV_FM3130 is not set
++# CONFIG_RTC_DRV_RX8581 is not set
++# CONFIG_RTC_DRV_RX8025 is not set
++# CONFIG_RTC_DRV_EM3027 is not set
++# CONFIG_RTC_DRV_RV3029C2 is not set
++
++#
++# SPI RTC drivers
++#
++
++#
++# Platform RTC drivers
++#
++# CONFIG_RTC_DRV_CMOS is not set
++# CONFIG_RTC_DRV_DS1286 is not set
++# CONFIG_RTC_DRV_DS1511 is not set
++# CONFIG_RTC_DRV_DS1553 is not set
++# CONFIG_RTC_DRV_DS1742 is not set
++# CONFIG_RTC_DRV_STK17TA8 is not set
++# CONFIG_RTC_DRV_M48T86 is not set
++# CONFIG_RTC_DRV_M48T35 is not set
++# CONFIG_RTC_DRV_M48T59 is not set
++# CONFIG_RTC_DRV_MSM6242 is not set
++# CONFIG_RTC_DRV_BQ4802 is not set
++# CONFIG_RTC_DRV_RP5C01 is not set
++# CONFIG_RTC_DRV_V3020 is not set
++# CONFIG_RTC_DRV_DS2404 is not set
++
++#
++# on-CPU RTC drivers
++#
++# CONFIG_RTC_DRV_MOXART is not set
++
++#
++# HID Sensor RTC drivers
++#
++# CONFIG_RTC_DRV_HID_SENSOR_TIME is not set
++# CONFIG_DMADEVICES is not set
++# CONFIG_AUXDISPLAY is not set
++# CONFIG_UIO is not set
++# CONFIG_VIRT_DRIVERS is not set
++
++#
++# Virtio drivers
++#
++# CONFIG_VIRTIO_MMIO is not set
++
++#
++# Microsoft Hyper-V guest support
++#
++# CONFIG_STAGING is not set
++
++#
++# Hardware Spinlock drivers
++#
++# CONFIG_MAILBOX is not set
++# CONFIG_IOMMU_SUPPORT is not set
++
++#
++# Remoteproc drivers
++#
++# CONFIG_STE_MODEM_RPROC is not set
++
++#
++# Rpmsg drivers
++#
++# CONFIG_PM_DEVFREQ is not set
++# CONFIG_EXTCON is not set
++# CONFIG_MEMORY is not set
++# CONFIG_IIO is not set
++# CONFIG_PWM is not set
++# CONFIG_IPACK_BUS is not set
++# CONFIG_RESET_CONTROLLER is not set
++# CONFIG_FMC is not set
++
++#
++# PHY Subsystem
++#
++CONFIG_GENERIC_PHY=y
++# CONFIG_PHY_EXYNOS_MIPI_VIDEO is not set
++# CONFIG_BCM_KONA_USB2_PHY is not set
++# CONFIG_POWERCAP is not set
++
++#
++# File systems
++#
++CONFIG_EXT2_FS=y
++CONFIG_EXT2_FS_XATTR=y
++CONFIG_EXT2_FS_POSIX_ACL=y
++CONFIG_EXT2_FS_SECURITY=y
++# CONFIG_EXT2_FS_XIP is not set
++CONFIG_EXT3_FS=y
++CONFIG_EXT3_DEFAULTS_TO_ORDERED=y
++CONFIG_EXT3_FS_XATTR=y
++CONFIG_EXT3_FS_POSIX_ACL=y
++CONFIG_EXT3_FS_SECURITY=y
++CONFIG_EXT4_FS=y
++CONFIG_EXT4_FS_POSIX_ACL=y
++CONFIG_EXT4_FS_SECURITY=y
++# CONFIG_EXT4_DEBUG is not set
++CONFIG_JBD=y
++CONFIG_JBD2=y
++# CONFIG_JBD2_DEBUG is not set
++CONFIG_FS_MBCACHE=y
++# CONFIG_REISERFS_FS is not set
++# CONFIG_JFS_FS is not set
++# CONFIG_XFS_FS is not set
++# CONFIG_GFS2_FS is not set
++# CONFIG_OCFS2_FS is not set
++# CONFIG_BTRFS_FS is not set
++# CONFIG_NILFS2_FS is not set
++CONFIG_FS_POSIX_ACL=y
++CONFIG_FILE_LOCKING=y
++CONFIG_FSNOTIFY=y
++CONFIG_DNOTIFY=y
++CONFIG_INOTIFY_USER=y
++# CONFIG_FANOTIFY is not set
++# CONFIG_QUOTA is not set
++# CONFIG_QUOTACTL is not set
++# CONFIG_AUTOFS4_FS is not set
++CONFIG_FUSE_FS=y
++CONFIG_CUSE=y
++
++#
++# Caches
++#
++# CONFIG_FSCACHE is not set
++
++#
++# CD-ROM/DVD Filesystems
++#
++CONFIG_ISO9660_FS=y
++CONFIG_JOLIET=y
++CONFIG_ZISOFS=y
++CONFIG_UDF_FS=y
++CONFIG_UDF_NLS=y
++
++#
++# DOS/FAT/NT Filesystems
++#
++CONFIG_FAT_FS=y
++CONFIG_MSDOS_FS=y
++CONFIG_VFAT_FS=y
++CONFIG_FAT_DEFAULT_CODEPAGE=437
++CONFIG_FAT_DEFAULT_IOCHARSET="iso8859-1"
++CONFIG_NTFS_FS=y
++# CONFIG_NTFS_DEBUG is not set
++CONFIG_NTFS_RW=y
++
++#
++# Pseudo filesystems
++#
++CONFIG_PROC_FS=y
++CONFIG_PROC_SYSCTL=y
++CONFIG_PROC_PAGE_MONITOR=y
++CONFIG_SYSFS=y
++CONFIG_TMPFS=y
++# CONFIG_TMPFS_POSIX_ACL is not set
++# CONFIG_TMPFS_XATTR is not set
++# CONFIG_HUGETLB_PAGE is not set
++CONFIG_CONFIGFS_FS=y
++CONFIG_MISC_FILESYSTEMS=y
++# CONFIG_ADFS_FS is not set
++# CONFIG_AFFS_FS is not set
++# CONFIG_ECRYPT_FS is not set
++# CONFIG_HFS_FS is not set
++# CONFIG_HFSPLUS_FS is not set
++# CONFIG_BEFS_FS is not set
++# CONFIG_BFS_FS is not set
++# CONFIG_EFS_FS is not set
++CONFIG_JFFS2_FS=y
++CONFIG_JFFS2_FS_DEBUG=0
++# CONFIG_JFFS2_FS_WRITEBUFFER is not set
++# CONFIG_JFFS2_SUMMARY is not set
++# CONFIG_JFFS2_FS_XATTR is not set
++# CONFIG_JFFS2_COMPRESSION_OPTIONS is not set
++CONFIG_JFFS2_ZLIB=y
++# CONFIG_JFFS2_LZO is not set
++CONFIG_JFFS2_RTIME=y
++# CONFIG_JFFS2_RUBIN is not set
++# CONFIG_LOGFS is not set
++CONFIG_CRAMFS=y
++CONFIG_SQUASHFS=y
++CONFIG_SQUASHFS_FILE_CACHE=y
++# CONFIG_SQUASHFS_FILE_DIRECT is not set
++CONFIG_SQUASHFS_DECOMP_SINGLE=y
++# CONFIG_SQUASHFS_DECOMP_MULTI is not set
++# CONFIG_SQUASHFS_DECOMP_MULTI_PERCPU is not set
++# CONFIG_SQUASHFS_XATTR is not set
++CONFIG_SQUASHFS_ZLIB=y
++# CONFIG_SQUASHFS_LZO is not set
++# CONFIG_SQUASHFS_XZ is not set
++# CONFIG_SQUASHFS_4K_DEVBLK_SIZE is not set
++# CONFIG_SQUASHFS_EMBEDDED is not set
++CONFIG_SQUASHFS_FRAGMENT_CACHE_SIZE=3
++# CONFIG_VXFS_FS is not set
++# CONFIG_MINIX_FS is not set
++# CONFIG_OMFS_FS is not set
++# CONFIG_HPFS_FS is not set
++# CONFIG_QNX4FS_FS is not set
++# CONFIG_QNX6FS_FS is not set
++# CONFIG_ROMFS_FS is not set
++# CONFIG_PSTORE is not set
++# CONFIG_SYSV_FS is not set
++# CONFIG_UFS_FS is not set
++# CONFIG_F2FS_FS is not set
++CONFIG_NETWORK_FILESYSTEMS=y
++CONFIG_NFS_FS=y
++CONFIG_NFS_V2=y
++CONFIG_NFS_V3=y
++# CONFIG_NFS_V3_ACL is not set
++CONFIG_NFS_V4=y
++# CONFIG_NFS_SWAP is not set
++# CONFIG_NFS_V4_1 is not set
++CONFIG_ROOT_NFS=y
++# CONFIG_NFS_USE_LEGACY_DNS is not set
++CONFIG_NFS_USE_KERNEL_DNS=y
++# CONFIG_NFSD is not set
++CONFIG_LOCKD=y
++CONFIG_LOCKD_V4=y
++CONFIG_NFS_COMMON=y
++CONFIG_SUNRPC=y
++CONFIG_SUNRPC_GSS=y
++# CONFIG_SUNRPC_DEBUG is not set
++# CONFIG_CEPH_FS is not set
++CONFIG_CIFS=y
++# CONFIG_CIFS_STATS is not set
++# CONFIG_CIFS_WEAK_PW_HASH is not set
++# CONFIG_CIFS_UPCALL is not set
++# CONFIG_CIFS_XATTR is not set
++CONFIG_CIFS_DEBUG=y
++# CONFIG_CIFS_DEBUG2 is not set
++# CONFIG_CIFS_DFS_UPCALL is not set
++# CONFIG_CIFS_SMB2 is not set
++# CONFIG_NCP_FS is not set
++# CONFIG_CODA_FS is not set
++# CONFIG_AFS_FS is not set
++CONFIG_NLS=y
++CONFIG_NLS_DEFAULT="iso8859-1"
++CONFIG_NLS_CODEPAGE_437=y
++# CONFIG_NLS_CODEPAGE_737 is not set
++# CONFIG_NLS_CODEPAGE_775 is not set
++# CONFIG_NLS_CODEPAGE_850 is not set
++# CONFIG_NLS_CODEPAGE_852 is not set
++# CONFIG_NLS_CODEPAGE_855 is not set
++# CONFIG_NLS_CODEPAGE_857 is not set
++# CONFIG_NLS_CODEPAGE_860 is not set
++# CONFIG_NLS_CODEPAGE_861 is not set
++# CONFIG_NLS_CODEPAGE_862 is not set
++# CONFIG_NLS_CODEPAGE_863 is not set
++# CONFIG_NLS_CODEPAGE_864 is not set
++# CONFIG_NLS_CODEPAGE_865 is not set
++# CONFIG_NLS_CODEPAGE_866 is not set
++# CONFIG_NLS_CODEPAGE_869 is not set
++# CONFIG_NLS_CODEPAGE_936 is not set
++# CONFIG_NLS_CODEPAGE_950 is not set
++# CONFIG_NLS_CODEPAGE_932 is not set
++# CONFIG_NLS_CODEPAGE_949 is not set
++# CONFIG_NLS_CODEPAGE_874 is not set
++# CONFIG_NLS_ISO8859_8 is not set
++# CONFIG_NLS_CODEPAGE_1250 is not set
++# CONFIG_NLS_CODEPAGE_1251 is not set
++# CONFIG_NLS_ASCII is not set
++CONFIG_NLS_ISO8859_1=y
++# CONFIG_NLS_ISO8859_2 is not set
++# CONFIG_NLS_ISO8859_3 is not set
++# CONFIG_NLS_ISO8859_4 is not set
++# CONFIG_NLS_ISO8859_5 is not set
++# CONFIG_NLS_ISO8859_6 is not set
++# CONFIG_NLS_ISO8859_7 is not set
++# CONFIG_NLS_ISO8859_9 is not set
++# CONFIG_NLS_ISO8859_13 is not set
++# CONFIG_NLS_ISO8859_14 is not set
++# CONFIG_NLS_ISO8859_15 is not set
++# CONFIG_NLS_KOI8_R is not set
++# CONFIG_NLS_KOI8_U is not set
++# CONFIG_NLS_MAC_ROMAN is not set
++# CONFIG_NLS_MAC_CELTIC is not set
++# CONFIG_NLS_MAC_CENTEURO is not set
++# CONFIG_NLS_MAC_CROATIAN is not set
++# CONFIG_NLS_MAC_CYRILLIC is not set
++# CONFIG_NLS_MAC_GAELIC is not set
++# CONFIG_NLS_MAC_GREEK is not set
++# CONFIG_NLS_MAC_ICELAND is not set
++# CONFIG_NLS_MAC_INUIT is not set
++# CONFIG_NLS_MAC_ROMANIAN is not set
++# CONFIG_NLS_MAC_TURKISH is not set
++CONFIG_NLS_UTF8=y
++# CONFIG_DLM is not set
++
++#
++# Kernel hacking
++#
++
++#
++# printk and dmesg options
++#
++CONFIG_PRINTK_TIME=y
++CONFIG_DEFAULT_MESSAGE_LOGLEVEL=4
++# CONFIG_BOOT_PRINTK_DELAY is not set
++
++#
++# Compile-time checks and compiler options
++#
++CONFIG_DEBUG_INFO=y
++# CONFIG_DEBUG_INFO_REDUCED is not set
++CONFIG_ENABLE_WARN_DEPRECATED=y
++CONFIG_ENABLE_MUST_CHECK=y
++CONFIG_FRAME_WARN=1024
++# CONFIG_STRIP_ASM_SYMS is not set
++# CONFIG_READABLE_ASM is not set
++# CONFIG_UNUSED_SYMBOLS is not set
++# CONFIG_DEBUG_FS is not set
++# CONFIG_HEADERS_CHECK is not set
++# CONFIG_DEBUG_SECTION_MISMATCH is not set
++CONFIG_FRAME_POINTER=y
++# CONFIG_DEBUG_FORCE_WEAK_PER_CPU is not set
++CONFIG_MAGIC_SYSRQ=y
++CONFIG_MAGIC_SYSRQ_DEFAULT_ENABLE=0x1
++CONFIG_DEBUG_KERNEL=y
++
++#
++# Memory Debugging
++#
++# CONFIG_DEBUG_PAGEALLOC is not set
++# CONFIG_DEBUG_OBJECTS is not set
++# CONFIG_SLUB_STATS is not set
++CONFIG_HAVE_DEBUG_KMEMLEAK=y
++# CONFIG_DEBUG_KMEMLEAK is not set
++# CONFIG_DEBUG_STACK_USAGE is not set
++# CONFIG_DEBUG_VM is not set
++# CONFIG_DEBUG_MEMORY_INIT is not set
++# CONFIG_DEBUG_SHIRQ is not set
++
++#
++# Debug Lockups and Hangs
++#
++CONFIG_LOCKUP_DETECTOR=y
++# CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC is not set
++CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC_VALUE=0
++# CONFIG_DETECT_HUNG_TASK is not set
++CONFIG_PANIC_ON_OOPS=y
++CONFIG_PANIC_ON_OOPS_VALUE=1
++CONFIG_PANIC_TIMEOUT=1
++CONFIG_SCHED_DEBUG=y
++# CONFIG_SCHEDSTATS is not set
++# CONFIG_TIMER_STATS is not set
++
++#
++# Lock Debugging (spinlocks, mutexes, etc...)
++#
++# CONFIG_DEBUG_RT_MUTEXES is not set
++# CONFIG_RT_MUTEX_TESTER is not set
++# CONFIG_DEBUG_SPINLOCK is not set
++# CONFIG_DEBUG_MUTEXES is not set
++# CONFIG_DEBUG_WW_MUTEX_SLOWPATH is not set
++# CONFIG_DEBUG_LOCK_ALLOC is not set
++# CONFIG_PROVE_LOCKING is not set
++# CONFIG_LOCK_STAT is not set
++# CONFIG_DEBUG_ATOMIC_SLEEP is not set
++# CONFIG_DEBUG_LOCKING_API_SELFTESTS is not set
++# CONFIG_DEBUG_KOBJECT is not set
++CONFIG_DEBUG_BUGVERBOSE=y
++# CONFIG_DEBUG_WRITECOUNT is not set
++# CONFIG_DEBUG_LIST is not set
++# CONFIG_DEBUG_SG is not set
++# CONFIG_DEBUG_NOTIFIERS is not set
++# CONFIG_DEBUG_CREDENTIALS is not set
++
++#
++# RCU Debugging
++#
++# CONFIG_SPARSE_RCU_POINTER is not set
++# CONFIG_RCU_TORTURE_TEST is not set
++# CONFIG_RCU_TRACE is not set
++# CONFIG_DEBUG_BLOCK_EXT_DEVT is not set
++# CONFIG_NOTIFIER_ERROR_INJECTION is not set
++# CONFIG_FAULT_INJECTION is not set
++# CONFIG_LATENCYTOP is not set
++CONFIG_HAVE_FUNCTION_TRACER=y
++CONFIG_HAVE_FUNCTION_GRAPH_TRACER=y
++CONFIG_HAVE_DYNAMIC_FTRACE=y
++CONFIG_HAVE_FTRACE_MCOUNT_RECORD=y
++CONFIG_HAVE_SYSCALL_TRACEPOINTS=y
++CONFIG_HAVE_C_RECORDMCOUNT=y
++CONFIG_TRACING_SUPPORT=y
++# CONFIG_FTRACE is not set
++
++#
++# Runtime Testing
++#
++# CONFIG_TEST_LIST_SORT is not set
++# CONFIG_BACKTRACE_SELF_TEST is not set
++# CONFIG_RBTREE_TEST is not set
++# CONFIG_INTERVAL_TREE_TEST is not set
++# CONFIG_PERCPU_TEST is not set
++# CONFIG_ATOMIC64_SELFTEST is not set
++# CONFIG_TEST_STRING_HELPERS is not set
++# CONFIG_TEST_KSTRTOX is not set
++# CONFIG_DMA_API_DEBUG is not set
++# CONFIG_TEST_MODULE is not set
++# CONFIG_TEST_USER_COPY is not set
++# CONFIG_SAMPLES is not set
++CONFIG_HAVE_ARCH_KGDB=y
++# CONFIG_KGDB is not set
++# CONFIG_ARM_PTDUMP is not set
++# CONFIG_STRICT_DEVMEM is not set
++# CONFIG_ARM_UNWIND is not set
++CONFIG_DEBUG_USER=y
++# CONFIG_DEBUG_LL is not set
++CONFIG_DEBUG_LL_INCLUDE="mach/debug-macro.S"
++# CONFIG_DEBUG_UART_PL01X is not set
++# CONFIG_DEBUG_UART_8250 is not set
++CONFIG_UNCOMPRESS_INCLUDE="mach/uncompress.h"
++# CONFIG_DEBUG_SET_MODULE_RONX is not set
++
++#
++# Security options
++#
++CONFIG_KEYS=y
++# CONFIG_PERSISTENT_KEYRINGS is not set
++# CONFIG_BIG_KEYS is not set
++# CONFIG_ENCRYPTED_KEYS is not set
++# CONFIG_KEYS_DEBUG_PROC_KEYS is not set
++# CONFIG_SECURITY_DMESG_RESTRICT is not set
++# CONFIG_SECURITY is not set
++# CONFIG_SECURITYFS is not set
++CONFIG_DEFAULT_SECURITY_DAC=y
++CONFIG_DEFAULT_SECURITY=""
++CONFIG_CRYPTO=y
++
++#
++# Crypto core or helper
++#
++CONFIG_CRYPTO_ALGAPI=y
++CONFIG_CRYPTO_ALGAPI2=y
++CONFIG_CRYPTO_AEAD=y
++CONFIG_CRYPTO_AEAD2=y
++CONFIG_CRYPTO_BLKCIPHER=y
++CONFIG_CRYPTO_BLKCIPHER2=y
++CONFIG_CRYPTO_HASH=y
++CONFIG_CRYPTO_HASH2=y
++CONFIG_CRYPTO_RNG2=y
++CONFIG_CRYPTO_PCOMP2=y
++CONFIG_CRYPTO_MANAGER=y
++CONFIG_CRYPTO_MANAGER2=y
++# CONFIG_CRYPTO_USER is not set
++# CONFIG_CRYPTO_MANAGER_DISABLE_TESTS is not set
++# CONFIG_CRYPTO_GF128MUL is not set
++# CONFIG_CRYPTO_NULL is not set
++CONFIG_CRYPTO_WORKQUEUE=y
++# CONFIG_CRYPTO_CRYPTD is not set
++CONFIG_CRYPTO_AUTHENC=y
++# CONFIG_CRYPTO_TEST is not set
++
++#
++# Authenticated Encryption with Associated Data
++#
++# CONFIG_CRYPTO_CCM is not set
++# CONFIG_CRYPTO_GCM is not set
++# CONFIG_CRYPTO_SEQIV is not set
++
++#
++# Block modes
++#
++CONFIG_CRYPTO_CBC=y
++# CONFIG_CRYPTO_CTR is not set
++# CONFIG_CRYPTO_CTS is not set
++CONFIG_CRYPTO_ECB=y
++# CONFIG_CRYPTO_LRW is not set
++# CONFIG_CRYPTO_PCBC is not set
++# CONFIG_CRYPTO_XTS is not set
++
++#
++# Hash modes
++#
++CONFIG_CRYPTO_CMAC=y
++CONFIG_CRYPTO_HMAC=y
++# CONFIG_CRYPTO_XCBC is not set
++# CONFIG_CRYPTO_VMAC is not set
++
++#
++# Digest
++#
++CONFIG_CRYPTO_CRC32C=y
++# CONFIG_CRYPTO_CRC32 is not set
++# CONFIG_CRYPTO_CRCT10DIF is not set
++# CONFIG_CRYPTO_GHASH is not set
++CONFIG_CRYPTO_MD4=y
++CONFIG_CRYPTO_MD5=y
++CONFIG_CRYPTO_MICHAEL_MIC=y
++# CONFIG_CRYPTO_RMD128 is not set
++# CONFIG_CRYPTO_RMD160 is not set
++# CONFIG_CRYPTO_RMD256 is not set
++# CONFIG_CRYPTO_RMD320 is not set
++CONFIG_CRYPTO_SHA1=y
++# CONFIG_CRYPTO_SHA1_ARM is not set
++CONFIG_CRYPTO_SHA256=y
++# CONFIG_CRYPTO_SHA512 is not set
++# CONFIG_CRYPTO_TGR192 is not set
++# CONFIG_CRYPTO_WP512 is not set
++
++#
++# Ciphers
++#
++CONFIG_CRYPTO_AES=y
++# CONFIG_CRYPTO_AES_ARM is not set
++# CONFIG_CRYPTO_ANUBIS is not set
++CONFIG_CRYPTO_ARC4=y
++# CONFIG_CRYPTO_BLOWFISH is not set
++# CONFIG_CRYPTO_CAMELLIA is not set
++# CONFIG_CRYPTO_CAST5 is not set
++# CONFIG_CRYPTO_CAST6 is not set
++CONFIG_CRYPTO_DES=y
++# CONFIG_CRYPTO_FCRYPT is not set
++# CONFIG_CRYPTO_KHAZAD is not set
++# CONFIG_CRYPTO_SALSA20 is not set
++# CONFIG_CRYPTO_SEED is not set
++# CONFIG_CRYPTO_SERPENT is not set
++# CONFIG_CRYPTO_TEA is not set
++# CONFIG_CRYPTO_TWOFISH is not set
++
++#
++# Compression
++#
++CONFIG_CRYPTO_DEFLATE=y
++# CONFIG_CRYPTO_ZLIB is not set
++# CONFIG_CRYPTO_LZO is not set
++# CONFIG_CRYPTO_LZ4 is not set
++# CONFIG_CRYPTO_LZ4HC is not set
++
++#
++# Random Number Generation
++#
++# CONFIG_CRYPTO_ANSI_CPRNG is not set
++# CONFIG_CRYPTO_USER_API_HASH is not set
++# CONFIG_CRYPTO_USER_API_SKCIPHER is not set
++CONFIG_CRYPTO_HW=y
++# CONFIG_ASYMMETRIC_KEY_TYPE is not set
++# CONFIG_BINARY_PRINTF is not set
++
++#
++# Library routines
++#
++CONFIG_BITREVERSE=y
++CONFIG_GENERIC_STRNCPY_FROM_USER=y
++CONFIG_GENERIC_STRNLEN_USER=y
++CONFIG_GENERIC_NET_UTILS=y
++CONFIG_GENERIC_PCI_IOMAP=y
++CONFIG_GENERIC_IO=y
++CONFIG_ARCH_USE_CMPXCHG_LOCKREF=y
++# CONFIG_CRC_CCITT is not set
++CONFIG_CRC16=y
++# CONFIG_CRC_T10DIF is not set
++CONFIG_CRC_ITU_T=y
++CONFIG_CRC32=y
++# CONFIG_CRC32_SELFTEST is not set
++CONFIG_CRC32_SLICEBY8=y
++# CONFIG_CRC32_SLICEBY4 is not set
++# CONFIG_CRC32_SARWATE is not set
++# CONFIG_CRC32_BIT is not set
++# CONFIG_CRC7 is not set
++# CONFIG_LIBCRC32C is not set
++# CONFIG_CRC8 is not set
++# CONFIG_RANDOM32_SELFTEST is not set
++CONFIG_ZLIB_INFLATE=y
++CONFIG_ZLIB_DEFLATE=y
++# CONFIG_XZ_DEC is not set
++# CONFIG_XZ_DEC_BCJ is not set
++CONFIG_DECOMPRESS_GZIP=y
++CONFIG_TEXTSEARCH=y
++CONFIG_TEXTSEARCH_KMP=y
++CONFIG_TEXTSEARCH_BM=y
++CONFIG_TEXTSEARCH_FSM=y
++CONFIG_ASSOCIATIVE_ARRAY=y
++CONFIG_HAS_IOMEM=y
++CONFIG_HAS_IOPORT=y
++CONFIG_HAS_DMA=y
++CONFIG_DQL=y
++CONFIG_NLATTR=y
++CONFIG_GENERIC_ATOMIC64=y
++CONFIG_ARCH_HAS_ATOMIC64_DEC_IF_POSITIVE=y
++# CONFIG_AVERAGE is not set
++# CONFIG_CORDIC is not set
++# CONFIG_DDR is not set
++CONFIG_OID_REGISTRY=y
++CONFIG_FONT_SUPPORT=y
++CONFIG_FONTS=y
++CONFIG_FONT_8x8=y
++CONFIG_FONT_8x16=y
++# CONFIG_FONT_6x11 is not set
++# CONFIG_FONT_7x14 is not set
++# CONFIG_FONT_PEARL_8x8 is not set
++# CONFIG_FONT_ACORN_8x8 is not set
++# CONFIG_FONT_MINI_4x6 is not set
++# CONFIG_FONT_SUN8x16 is not set
++# CONFIG_FONT_SUN12x22 is not set
++# CONFIG_FONT_10x18 is not set
++# CONFIG_VIRTUALIZATION is not set
+diff --git a/arch/arm/include/asm/glue-cache.h b/arch/arm/include/asm/glue-cache.h
+index a3c24cd..57f9be3 100644
+--- a/arch/arm/include/asm/glue-cache.h
++++ b/arch/arm/include/asm/glue-cache.h
+@@ -29,7 +29,7 @@
+ 
+ #if defined(CONFIG_CPU_ARM920T) || defined(CONFIG_CPU_ARM922T) || \
+     defined(CONFIG_CPU_ARM925T) || defined(CONFIG_CPU_ARM1020) || \
+-    defined(CONFIG_CPU_ARM1026)
++    defined(CONFIG_CPU_ARM1026) || defined(CONFIG_CPU_ARM926T)
+ # define MULTI_CACHE 1
+ #endif
+ 
+diff --git a/arch/arm/include/asm/serial.h b/arch/arm/include/asm/serial.h
+new file mode 100644
+index 0000000..8986c0c
+--- /dev/null
++++ b/arch/arm/include/asm/serial.h
+@@ -0,0 +1,9 @@
++#ifndef __ASM_SERIAL_H
++#define __ASM_SERIAL_H
++
++//#define BASE_BAUD    (1843200 / 16)
++
++#include <mach/serial.h>
++
++#endif
++
+diff --git a/arch/arm/include/asm/soc-ast/hwdef.h b/arch/arm/include/asm/soc-ast/hwdef.h
+new file mode 100644
+index 0000000..1529e1a
+--- /dev/null
++++ b/arch/arm/include/asm/soc-ast/hwdef.h
+@@ -0,0 +1,198 @@
++/*
++ *  This file contains the AST SOC Register definitions
++ *
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#ifndef     _HWDEF_ASTCOMMON_H
++#define     _HWDEF_ASTCOMMON_H_
++
++
++/* -----------------------------------------------------------------
++ *                  SRAM Registers
++ * -----------------------------------------------------------------
++ */
++
++
++/*
++ * -------------------------------------------------------------
++ *                     SDRAM Registers
++ * -------------------------------------------------------------
++ */
++
++
++/*--------------------------------------------------------
++ *  Timer definitions
++ * ------------------------------------------------------
++ */
++/* Timer conrol reg */
++#define TIMER3_INTR_ENABLE		0x400
++#define TIMER3_CLOCK_SELECT		0x200
++#define TIMER3_ENABLE			0x100
++#define TIMER2_INTR_ENABLE		0x040
++#define TIMER2_CLOCK_SELECT		0x020
++#define TIMER2_ENABLE			0x010
++#define TIMER1_INTR_ENABLE		0x004
++#define TIMER1_CLOCK_SELECT		0x002
++#define TIMER1_ENABLE			0x001
++
++
++/* --------------------------------------------------------
++ *  Interrupt Controllers
++ * --------------------------------------------------------
++ */
++#define IRQ_VIC2			IRQ_GPIO
++#define IRQMASK_VIC2			IRQMASK_GPIO
++
++/*
++ * VIC Register (VA)
++ */
++#define VIC_IRQ_ENABLE_VA				IRQ_ENABLE_REG
++#define VIC_IRQ_DISABLE_VA				IRQ_DISABLE_REG
++#define VIC_SOFT_INT_CLEAR_VA			SOFT_INT_CLEAR_REG
++
++#define VIC_SENSE_VA                   INTERRUPT_SENS_REG
++#define VIC_EVENT_VA                   INTERRUPT_EVENT_REG
++#define VIC_EDGE_CLEAR_VA              EDGE_TRIGGERED_INTCLEAR_REG
++
++#define EXT_VIC_SENSE_VA               EXT_INTERRUPT_SENS_REG
++#define EXT_VIC_EVENT_VA               EXT_INTERRUPT_EVENT_REG
++#define EXT_VIC_EDGE_CLEAR_VA          EXT_EDGE_TRIGGERED_INTCLEAR_REG
++
++#define IRQ_ENABLE(irq_no)             *((volatile unsigned long*)VIC_IRQ_ENABLE_VA)    |= 1 << (irq_no)
++#define IRQ_DISABLE(irq_no)            *((volatile unsigned long*)VIC_IRQ_DISABLE_VA)   |= 1 << (irq_no)
++#define IRQ_SOFT_INT_CLEAR(irq_no)     *((volatile unsigned long*)VIC_SOFT_INT_CLEAR_VA)|= 1 << (irq_no)
++
++#define IRQ_SET_LEVEL_TRIGGER(irq_no)   *((volatile unsigned long*)VIC_SENSE_VA) |= 1 << (irq_no)
++#define IRQ_SET_EDGE_TRIGGER(irq_no)    *((volatile unsigned long*)VIC_SENSE_VA) &= ~(1 << (irq_no))
++#define IRQ_SET_RISING_EDGE(irq_no)     *((volatile unsigned long*)VIC_EVENT_VA) |= 1 << (irq_no)
++#define IRQ_SET_FALLING_EDGE(irq_no)    *((volatile unsigned long*)VIC_EVENT_VA) &= ~(1 << (irq_no))
++#define IRQ_SET_HIGH_LEVEL(irq_no)      *((volatile unsigned long*)VIC_EVENT_VA) |= 1 << (irq_no)
++#define IRQ_SET_LOW_LEVEL(irq_no)       *((volatile unsigned long*)VIC_EVENT_VA) &= ~(1 << (irq_no))
++#define IRQ_EDGE_CLEAR(irq_no)          *((volatile unsigned long*)VIC_EDGE_CLEAR_VA) |= 1 << (irq_no)
++
++#define EXT_IRQ_SET_LEVEL_TRIGGER(irq_no)   *((volatile unsigned long*)EXT_VIC_SENSE_VA) |= 1 << (irq_no - BW_CMP_NR_IRQS)
++#define EXT_IRQ_SET_EDGE_TRIGGER(irq_no)    *((volatile unsigned long*)EXT_VIC_SENSE_VA) &= ~(1 << (irq_no - BW_CMP_NR_IRQS))
++#define EXT_IRQ_SET_RISING_EDGE(irq_no)     *((volatile unsigned long*)EXT_VIC_EVENT_VA) |= 1 << (irq_no - BW_CMP_NR_IRQS)
++#define EXT_IRQ_SET_FALLING_EDGE(irq_no)    *((volatile unsigned long*)EXT_VIC_EVENT_VA) &= ~(1 << (irq_no - BW_CMP_NR_IRQS))
++#define EXT_IRQ_SET_HIGH_LEVEL(irq_no)      *((volatile unsigned long*)EXT_VIC_EVENT_VA) |= 1 << (irq_no - BW_CMP_NR_IRQS)
++#define EXT_IRQ_SET_LOW_LEVEL(irq_no)       *((volatile unsigned long*)EXT_VIC_EVENT_VA) &= ~(1 << (irq_no - BW_CMP_NR_IRQS))
++#define EXT_IRQ_EDGE_CLEAR(irq_no)          *((volatile unsigned long*)EXT_VIC_EDGE_CLEAR_VA) |= 1 << (irq_no - BW_CMP_NR_IRQS)
++
++#define VIC2_SENSE_VA                   VIC2_SENSE
++#define VIC2_EVENT_VA                   VIC2_EVENT
++#define VIC2_EDGE_CLEAR_VA              VIC2_EDGE_CLEAR
++
++#define VIC2_IRQ_SET_LEVEL_TRIGGER(irq_no)     *((volatile unsigned long*)VIC2_SENSE_VA) |= 1 << (irq_no - VIC2_IRQ_SHIFT)
++#define VIC2_IRQ_SET_EDGE_TRIGGER(irq_no)      *((volatile unsigned long*)VIC2_SENSE_VA) &= ~(1 << (irq_no - VIC2_IRQ_SHIFT))
++#define VIC2_IRQ_SET_RISING_EDGE(irq_no)       *((volatile unsigned long*)VIC2_EVENT_VA) |= 1 << (irq_no - VIC2_IRQ_SHIFT)
++#define VIC2_IRQ_SET_FALLING_EDGE(irq_no)      *((volatile unsigned long*)VIC2_EVENT_VA) &= ~(1 << (irq_no - VIC2_IRQ_SHIFT))
++#define VIC2_IRQ_SET_HIGH_LEVEL(irq_no)        *((volatile unsigned long*)VIC2_EVENT_VA) |= 1 << (irq_no - VIC2_IRQ_SHIFT)
++#define VIC2_IRQ_SET_LOW_LEVEL(irq_no)         *((volatile unsigned long*)VIC2_EVENT_VA) &= ~(1 << (irq_no - VIC2_IRQ_SHIFT))
++#define VIC2_IRQ_EDGE_CLEAR(irq_no)            *((volatile unsigned long*)VIC_EDGE_CLEAR_VA) |= 1 << (irq_no - VIC2_IRQ_SHIFT)
++
++
++/*  --------------------------------------------------------------
++ *   I2S Controllers
++ *  --------------------------------------------------------------
++ */
++
++
++/*  --------------------------------------------------------------
++ *   SSP Controllers
++ *  --------------------------------------------------------------
++ */
++
++
++/*  --------------------------------------------------------------
++ *   I2C Controllers
++ *  --------------------------------------------------------------
++ */
++
++
++/*----------------------------------------------------------------
++ *   DMA Controllers
++ *----------------------------------------------------------------
++ */
++
++
++/*----------------------------------------------------------------
++ *   Serial  Controllers
++ *----------------------------------------------------------------
++ */
++#define AST_UART_CLOCK     UART_CLOCK/13 /* defined in board config */
++#define AST_BAUD_115200    (AST_UART_CLOCK /1843200)
++#define AST_BAUD_57600     (AST_UART_CLOCK /921600)
++#define AST_BAUD_38400     (AST_UART_CLOCK /614400)
++#define AST_BAUD_19200     (AST_UART_CLOCK /307200)
++#define AST_BAUD_14400     (AST_UART_CLOCK /230400)
++#define AST_BAUD_9600      (AST_UART_CLOCK /153600)
++
++
++/*----------------------------------------------------------------
++ *   UART DMA Controllers
++ *----------------------------------------------------------------
++ */
++#define	UART_TX_UDMA_EN					0x00
++#define	UART_RX_UDMA_EN					0x04
++#define	UART_UDMA_CONF					0x08
++#define	UART_UDMA_TIMER					0x0C
++
++#define	UART_TX_UDMA_REST				0x20
++#define	UART_RX_UDMA_REST				0x24
++
++#define	UART_TX_UDMA_IER				0x30
++#define	UART_TX_UDMA_ISR				0x34
++#define	UART_RX_UDMA_IER				0x38
++#define	UART_RX_UDMA_ISR				0x3C
++#define	UART_TX_R_POINT(x)				(0x40 + (x*0x20))
++#define	UART_TX_W_POINT(x)				(0x44 + (x*0x20))
++#define	UART_TX_UDMA_ADDR(x)			(0x48 + (x*0x20))
++#define	UART_RX_R_POINT(x)				(0x50 + (x*0x20))
++#define	UART_RX_W_POINT(x)				(0x54 + (x*0x20))
++#define	UART_RX_UDMA_ADDR(x)			(0x58 + (x*0x20))
++
++/* UART_TX_UDMA_EN	-0x00 : UART TX DMA Enable */
++/* UART_RX_UDMA_EN	-0x04 : UART RX DMA Enable */
++#define UDMA_CH_EN(x)					(0x1 << (x))
++
++/* UART_UDMA_CONF - 0x08 : Misc, Buffer size  */
++#define UDMA_TX_BUFF_SIZE_MASK			(0x3)
++#define UDMA_SET_TX_BUFF_SIZE(x)		(x)
++#define UDMA_BUFF_SIZE_1KB				(0x0)
++#define UDMA_BUFF_SIZE_4KB				(0x1)
++#define UDMA_BUFF_SIZE_16KB				(0x2)
++#define UDMA_BUFF_SIZE_64KB				(0x3)
++#define UDMA_RX_BUFF_SIZE_MASK			(0x3 << 2)
++#define UDMA_SET_RX_BUFF_SIZE(x)		(x << 2)
++#define UDMA_TIMEOUT_DIS				(0x1 << 4)
++
++/*----------------------------------------------------------------
++ *   RTC
++ *----------------------------------------------------------------
++ */
++
++
++/*----------------------------------------------------------------
++ *   WDT
++ *----------------------------------------------------------------
++ */
++#define WDT_TIMER_EN       0x01
++#define WDT_RESET_EN       0x02
++
++
++#endif /* _HWDEF_AST2400_H_ */
+diff --git a/arch/arm/include/asm/soc-ast/hwmap.h b/arch/arm/include/asm/soc-ast/hwmap.h
+new file mode 100644
+index 0000000..ac425b2
+--- /dev/null
++++ b/arch/arm/include/asm/soc-ast/hwmap.h
+@@ -0,0 +1,534 @@
++/*
++ *  This file contains the AST SOC Register Base, IRQ and DMA  mappings
++ *
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#ifndef     _HWREG_ASTCOMMON_H_
++#define     _HWMAP_ASTCOMMON_H_
++
++
++/********************************************************************
++   Internal Register Mapping Actual = 0x1E600000 to 0x1E78CFFF
++   After Align the base and size    = 0x16000000 to 0x1EFFFFFF
++*********************************************************************/
++
++#define AST_REGISTER_BASE              0x14000000
++#define AST_REGISTER_SIZE              0x0A800000
++
++/*--------------------------- Individual Devices ------------------------- */
++#define AST_SPI_FLASH_BASE             CONFIG_SPX_FEATURE_GLOBAL_FLASH_START
++#define AST_SMC_BASE                   0x16000000
++#define AST_AHBC_BASE                  0x1E600000
++#define AST_FMC_BASE                   0x1E620000
++#define AST_SPI_BASE                   0X1e630000
++#define AST_MIC_BASE                   0x1E640000
++#define AST_MAC1_BASE                  0x1E660000
++#define AST_MAC2_BASE                  0x1E680000
++#define AST_MAC3_BASE                  0x1E670000    /* ???? */
++#define AST_MAC4_BASE                  0x1E690000	 /* ???? */
++#define AST_USB20_BASE                 0x1E6A0000
++#if defined(CONFIG_SOC_AST3200) || defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define AST_USB20_1_BASE               0x1E6A1000	/* Only in AST3200 and maybe in AST2500 too */
++#define AST_USB20_2_BASE               0x1E6A3000	/* Only in AST3200 and maybe in AST2500 too */
++#endif
++#define AST_USB11_BASE                 0x1E6B0000
++#define AST_IC_BASE                    0x1E6C0000
++#define AST_SDRAMC_BASE                0x1E6E0000
++#define AST_USB1_BASE                  0x1E6E1000	 /* Not in AST3100 */
++#define AST_SCU_BASE                   0x1E6E2000
++#define AST_CRYPTO_BASE                0x1E6E3000  
++#define AST_JTAG_BASE                  0x1E6E4000 
++#define AST_GRAPHIC_BASE               0x1E6E6000
++#define AST_DMA_BASE                   0x1E6E7000	 /* Not in AST3100 */
++#define AST_MCTP_BASE                  0x1E6E8000    /* Not in AST3100 */
++#define AST_ADC_BASE                   0x1E6E9000
++#define AST_PS2_BASE                   0x1E6EA000    /* AST3100 Specific */
++#define AST_RFX_BASE                   0x1E6EB000    /* AST3100 Specific */
++#define AST_LPC_PLUS_BASE              0x1E6EC000	 /* Not in AST3100   */
++#ifdef CONFIG_SOC_AST3200
++#define AST_PCIE_BASE                  0x1E6ED000
++#define AST_P2X_BASE                   0x1E6F0000	/* P2X Bridge  */
++#define AST_PCIE_WIN_BASE              0x70000000	/* PCIe Host Bus Bridge */
++#define AST_PCIE_WIN_SIZE              0x10000000
++#else
++#define AST_PCI_MASTER1_BASE           0x60000000    /* Not in AST3200   */
++#define AST_PCI_MASTER2_BASE           0x80000000    /* Not in AST3200   */
++#endif
++#define AST_VIDEO_BASE                 0x1E700000	 /* Not in AST3100   */  
++#define AST_AHB_TO_PBUS_BASE           0x1E720000	 /* SRAM */ 	
++#define AST_MDMA_BASE                  0x1E740000	 /* SD/MMC controller */
++#define AST_2D_BASE                    0x1E760000
++#define AST_GPIO_BASE                  0x1E780000
++#define AST_RTC_BASE                   0x1E781000
++#define AST_TIMER_BASE                 0x1E782000
++#define AST_UART1_BASE                 0x1E783000
++#define AST_UART5_BASE                 0x1E784000
++#define AST_WDT_BASE                   0x1E785000
++#define AST_PWM_BASE                   0x1E786000
++#define AST_VUART0_BASE                0x1E787000    /* Not in AST3100   */
++#define AST_VUART1_BASE                0x1E788000    /* Not in AST3100   */
++#define AST_LPC_BASE                   0x1E789000    /* Not in AST3100   */
++#define AST_I2C_BASE                   0x1E78A000
++#define AST_PECI_BASE                  0x1E78B000    /* Not in AST3100   */
++#define AST_UART2_BASE                 0x1E78D000
++#define AST_UART3_BASE                 0x1E78E000
++#define AST_UART4_BASE                 0x1E78F000
++#define AST_PCIARBITER_BASE            0x1E78C000
++#if defined(CONFIG_SOC_AST2530)
++#define AST_UART6_BASE                 0x1E790000
++#define AST_UART7_BASE                 0x1E791000
++#define AST_UART8_BASE                 0x1E792000
++#define AST_UART9_BASE                 0x1E793000
++#define AST_UART10_BASE                0x1E794000
++#define AST_UART11_BASE                0x1E795000
++#define AST_UART12_BASE                0x1E796000
++#define AST_UART13_BASE                0x1E797000
++#endif
++#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define AST_UART_UDMA_BASE             0x1E79E000
++#endif
++#ifdef CONFIG_SOC_AST3200
++#define AST_H264_BASE                  0x1E7C0000
++#endif
++
++
++/*--------------- Virtual address of the IO Registers Region  ------------*/
++#define AST_REGISTER_VA_BASE            IO_ADDRESS(AST_REGISTER_BASE)
++
++#define AST_SPI_FLASH_VA_BASE           IO_ADDRESS(AST_SPI_FLASH_BASE)
++#define AST_SMC_VA_BASE                 IO_ADDRESS(AST_SMC_BASE)
++#define AST_FMC_VA_BASE                 IO_ADDRESS(AST_FMC_BASE)
++#define AST_AHBC_VA_BASE                IO_ADDRESS(AST_AHBC_BASE)
++#define AST_MAC1_VA_BASE                IO_ADDRESS(AST_MAC1_BASE)
++#define AST_MAC2_VA_BASE                IO_ADDRESS(AST_MAC2_BASE)
++#define AST_MAC3_VA_BASE                IO_ADDRESS(AST_MAC3_BASE)
++#define AST_MAC4_VA_BASE                IO_ADDRESS(AST_MAC4_BASE)
++#define AST_USB20_VA_BASE               IO_ADDRESS(AST_USB20_BASE)
++#if defined(CONFIG_SOC_AST3200) || defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define AST_USB20_1_VA_BASE             IO_ADDRESS(AST_USB20_1_BASE)
++#define AST_USB20_2_VA_BASE             IO_ADDRESS(AST_USB20_2_BASE)
++#endif
++#define AST_USB11_VA_BASE               IO_ADDRESS(AST_USB11_BASE)
++#define AST_IC_VA_BASE                  IO_ADDRESS(AST_IC_BASE)
++#define AST_SDRAMC_VA_BASE              IO_ADDRESS(AST_SDRAMC_BASE)
++#define AST_USB1_VA_BASE                IO_ADDRESS(AST_USB1_BASE)
++#define AST_SCU_VA_BASE                 IO_ADDRESS(AST_SCU_BASE)
++#define AST_CRYPTO_VA_BASE              IO_ADDRESS(AST_CRYPTO_BASE)
++#define AST_JTAG_VA_BASE                IO_ADDRESS(AST_JTAG_BASE)
++
++#define AST_GRAPHIC_VA_BASE             IO_ADDRESS(AST_GRAPHIC_BASE)
++#define AST_DMA_VA_BASE                 IO_ADDRESS(AST_DMA_BASE)
++#define AST_MCTP_VA_BASE                IO_ADDRESS(AST_MCTP_BASE)
++#define AST_ADC_VA_BASE                 IO_ADDRESS(AST_ADC_BASE)
++#define AST_PS2_VA_BASE                 IO_ADDRESS(AST_PS2_BASE)
++#define AST_RFX_VA_BASE                 IO_ADDRESS(AST_RFX_BASE)
++#ifdef CONFIG_SOC_AST3200
++#define AST_H264_VA_BASE                IO_ADDRESS(AST_H264_BASE)
++#define AST_PCIE_VA_BASE                IO_ADDRESS(AST_PCIE_BASE)
++#define AST_P2X_VA_BASE                 IO_ADDRESS(AST_P2X_BASE)	
++#define AST_PCIE_WIN_VA_BASE            IO_ADDRESS(AST_PCIE_WIN_BASE)
++#endif
++#define AST_LPC_PLUS_VA_BASE            IO_ADDRESS(AST_LPC_PLUS_BASE)
++#define AST_VIDEO_VA_BASE               IO_ADDRESS(AST_VIDEO_BASE)
++#define AST_AHB_TO_PBUS_VA_BASE         IO_ADDRESS(AST_AHB_TO_PBUS_BASE)
++#define AST_MDMA_VA_BASE                IO_ADDRESS(AST_MDMA_BASE)
++#define AST_2D_VA_BASE                  IO_ADDRESS(AST_2D_BASE)
++#define AST_GPIO_VA_BASE                IO_ADDRESS(AST_GPIO_BASE)
++#define AST_RTC_VA_BASE                 IO_ADDRESS(AST_RTC_BASE)
++#define AST_TIMER_VA_BASE               IO_ADDRESS(AST_TIMER_BASE)
++#define AST_UART1_VA_BASE               IO_ADDRESS(AST_UART1_BASE)
++#define AST_UART2_VA_BASE               IO_ADDRESS(AST_UART2_BASE)
++#define AST_UART3_VA_BASE               IO_ADDRESS(AST_UART3_BASE)
++#define AST_UART4_VA_BASE               IO_ADDRESS(AST_UART4_BASE)
++#define AST_UART5_VA_BASE               IO_ADDRESS(AST_UART5_BASE)
++#define AST_WDT_VA_BASE                 IO_ADDRESS(AST_WDT_BASE)
++#define AST_PWM_VA_BASE                 IO_ADDRESS(AST_PWM_BASE)
++#define AST_LPC_VA_BASE                 IO_ADDRESS(AST_LPC_BASE)
++#define AST_VUART0_VA_BASE              IO_ADDRESS(AST_VUART0_BASE)
++#define AST_VUART1_VA_BASE              IO_ADDRESS(AST_VUART1_BASE)
++#define AST_I2C_VA_BASE                 IO_ADDRESS(AST_I2C_BASE)
++#define AST_PECI_VA_BASE                IO_ADDRESS(AST_PECI_BASE)
++#define AST_PCIARBITER_VA_BASE          IO_ADDRESS(AST_PCIARBITER_BASE)
++#if defined(CONFIG_SOC_AST2530)
++#define AST_UART6_VA_BASE               IO_ADDRESS(AST_UART6_BASE)
++#define AST_UART7_VA_BASE               IO_ADDRESS(AST_UART7_BASE)
++#define AST_UART8_VA_BASE               IO_ADDRESS(AST_UART8_BASE)
++#define AST_UART9_VA_BASE               IO_ADDRESS(AST_UART9_BASE)
++#define AST_UART10_VA_BASE              IO_ADDRESS(AST_UART10_BASE)
++#define AST_UART11_VA_BASE              IO_ADDRESS(AST_UART11_BASE)
++#define AST_UART12_VA_BASE              IO_ADDRESS(AST_UART12_BASE)
++#define AST_UART13_VA_BASE              IO_ADDRESS(AST_UART13_BASE)
++#endif
++#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define AST_UART_UDMA_VA_BASE           IO_ADDRESS(AST_UART_UDMA_BASE)
++#endif
++
++
++/*****************************************************************
++                     IRQ Assignment
++*****************************************************************/
++#ifdef CONFIG_SOC_AST2300
++#define NR_IRQS                         46
++#define MAXIRQNUM                       45
++#endif
++
++#if defined(CONFIG_SOC_AST2400) || defined(CONFIG_SOC_AST1250) 
++#define NR_IRQS                			51	
++#define MAXIRQNUM           			50
++#endif
++
++#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define NR_IRQS                			64	
++#define MAXIRQNUM           			63
++#endif
++
++#ifdef CONFIG_SOC_AST3100
++#define NR_IRQS                			51
++#define MAXIRQNUM           			50
++#endif
++
++#ifdef CONFIG_SOC_AST3200
++#define AST_VIC_NUM						64
++#define NR_IRQS                			AST_VIC_NUM + ARCH_NR_PCIE
++#define MAXIRQNUM           			(AST_VIC_NUM + ARCH_NR_PCIE - 1)
++#endif
++
++
++#define BW_CMP_NR_IRQS		         32 //This is the number of IRQS backward-compatible to ast2050/2150
++
++//AST_PCIE
++#ifdef CONFIG_AST_PCIE
++#define ARCH_NR_PCIE				4
++#define AST_NUM_MSI_IRQS			0
++#define IRQ_PCIE_CHAIN				IRQ_PCIE
++#define IRQ_PCIE_CHAIN_START        (AST_VIC_NUM)
++
++#define IRQ_PCIE_INTA				(IRQ_PCIE_CHAIN_START)
++#define IRQ_PCIE_INTB				(IRQ_PCIE_CHAIN_START + 1)
++#define IRQ_PCIE_INTC				(IRQ_PCIE_CHAIN_START + 2)
++#define IRQ_PCIE_INTD				(IRQ_PCIE_CHAIN_START + 3)
++#define IRQ_PCIE_MSI0				(IRQ_PCIE_INTD + 1)		// support max 32 MSI
++#else
++#define ARCH_NR_PCIE				0
++#define AST_NUM_MSI_IRQS			0
++#endif //AST_PCIE
++
++#define IRQ_ECC                0
++#define IRQMASK_ECC            (1 << IRQ_ECC)
++#define IRQ_MIC                1
++#define IRQMASK_MIC            (1 << IRQ_MIC)
++#define IRQ_MAC1               2
++#define IRQMASK_MAC1           (1 << IRQ_MAC1)
++#define IRQ_MAC2               3
++#define IRQMASK_MAC2           (1 << IRQ_MAC2)
++#define IRQ_HAC                4 // CRYPTO
++#define IRQMASK_HAC            (1 << IRQ_HAC)
++#define IRQ_USB20              5 // 2.0 Hub/Host
++#define IRQMASK_USB20          (1 << IRQ_USB20)
++#define IRQ_MDMA               6						/* Non AST3100 */
++#define IRQMASK_MDMA           (1 << IRQ_MDMA)
++
++#define IRQ_RFXV0              7						/* AST3100  ???? */
++#define IRQMASK_RFXV0          (1 << IRQ_RFXV0)
++#define IRQ_VIDEO              7						/* Non AST3100 */
++#define IRQMASK_VIDEO          (1 << IRQ_VIDEO)
++
++#define IRQ_LPC                8						/* Non AST3100 */
++#define IRQ_VUARTINT0          8
++#define IRQMASK_LPC            (1 << IRQ_LPC)
++#define IRQ_UARTINT0           9
++#define IRQMASK_UARTINT0       (1 << IRQ_UARTINT0)
++#define IRQ_UARTINT4           10
++#define IRQMASK_UARTINT4       (1 << IRQ_UARTINT4)
++
++#define IRQ_RFXV1              11						/* AST3100 */
++#define IRQMASK_RFXV1          (1 << IRQ_RFXV1)
++
++#define IRQ_I2C                12
++#define IRQMASK_I2C            (1 << IRQ_I2C)
++
++#if defined(CONFIG_SOC_AST3200) || defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define IRQ_USB20_2            13 			
++#define IRQMASK_USB20_2        (1 << IRQ_USB20_2)
++#else
++#define IRQ_USB1               13 // 1.1 HID			/* Non AST3100 */
++#define IRQMASK_USB1           (1 << IRQ_USB1)
++#endif
++#define IRQ_USB11              14 // 1.1 Host
++#define IRQMASK_USB11          (1 << IRQ_USB11)
++
++#define IRQ_PECI               15                         /* Non AST3100 */
++#define IRQMASK_PECI           (1 << IRQ_PECI)
++#define IRQ_TIMERINT0          16
++#define IRQMASK_TIMERINT0      (1 << IRQ_TIMERINT0)
++#define IRQ_TIMERINT1          17
++#define IRQMASK_TIMERINT1      (1 << IRQ_TIMERINT1)
++#define IRQ_TIMERINT2          18
++#define IRQMASK_TIMERINT2      (1 << IRQ_TIMERINT2)
++#define IRQ_FLASH              19 // SMC
++#define IRQMASK_FLASH          (1 << IRQ_FLASH)
++#define IRQ_GPIO               20
++#define IRQMASK_GPIO           (1 << IRQ_GPIO)
++#define IRQ_SCU                21
++#define IRQMASK_SCU            (1 << IRQ_SCU)
++#define IRQ_RTC_ALARM          22
++#define IRQMASK_RTC_ALARM      (1 << IRQ_RTC_ALARM)
++#define IRQ_MAC3               23						/*  ????   */
++#define IRQMASK_MAC3           (1 << IRQ_MAC3)
++#define IRQ_MAC4               24						/*  ????   */
++#define IRQMASK_MAC4           (1 << IRQ_MAC4)
++#define IRQ_CRT                25
++#define IRQMASK_CRT            (1 << IRQ_CRT)
++#define IRQ_SD                 26
++#define IRQMASK_SD             (1 << IRQ_SD)
++#define IRQ_WDT                27
++#define IRQMASK_WDT            (1 << IRQ_WDT)
++#define IRQ_TACHO              28 // PWM
++#define IRQMASK_TACHO          (1 << IRQ_TACHO)
++#define IRQ_2D                 29
++#define IRQMASK_2D             (1 << IRQ_2D)
++#define IRQ_PCI                30 // Sys Wakeup
++#define IRQMASK_PCI            (1 << IRQ_PCI)
++#define IRQ_ADC       		   31
++#define IRQMASK_ADC      	   (1 << IRQ_ADC)
++#define IRQ_UARTINT1           32
++#define IRQMASK_UARTINT1       (1 << (IRQ_UARTINT1 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT2           33
++#define IRQMASK_UARTINT2       (1 << (IRQ_UARTINT2 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT3           34
++#define IRQMASK_UARTINT3       (1 << (IRQ_UARTINT3 - BW_CMP_NR_IRQS))
++#define IRQ_TIMERINT3          35
++#define IRQMASK_TIMERINT3      (1 << (IRQ_TIMERINT3 - BW_CMP_NR_IRQS))
++#define IRQ_TIMERINT4          36
++#define IRQMASK_TIMERINT4      (1 << (IRQ_TIMERINT4 - BW_CMP_NR_IRQS))
++#define IRQ_TIMERINT5          37
++#define IRQMASK_TIMERINT5      (1 << (IRQ_TIMERINT5 - BW_CMP_NR_IRQS))
++#define IRQ_TIMERINT6          38
++#define IRQMASK_TIMERINT6      (1 << (IRQ_TIMERINT6 - BW_CMP_NR_IRQS))
++#define IRQ_TIMERINT7          39
++#define IRQMASK_TIMERINT7      (1 << (IRQ_TIMERINT7 - BW_CMP_NR_IRQS))
++#define IRQ_SGPIO_MASTER       40
++#define IRQMASK_SGPIO_MASTER   (1 << (IRQ_SGPIO_MASTER - BW_CMP_NR_IRQS))
++
++#ifndef CONFIG_SOC_AST3200
++#define IRQ_SGPIO_SLAVE        41
++#define IRQMASK_SGPIO_SLAVE    (1 << (IRQ_SGPIO_SLAVE - BW_CMP_NR_IRQS))
++#else
++#define IRQ_P2X_BRIDGE         41
++#define IRQMASK_P2X_BRIDGE     (1 << (IRQ_P2X_BRIDGE - BW_CMP_NR_IRQS))
++#endif
++
++#define IRQ_MCTP               42                        /* Non AST3100 */
++#define IRQMASK_MCTP           (1 << (IRQ_MCTP - BW_CMP_NR_IRQS))
++#define IRQ_JTAG_MASTER        43
++#define IRQMASK_JTAG_MASTER    (1 << (IRQ_JTAG_MASTER - BW_CMP_NR_IRQS))
++
++#define IRQ_PS2				   44						  /* AST3100 */
++#define IRQMASK_PS2			   (1 << (IRQ_PS2 - BW_CMP_NR_IRQS))
++
++#define IRQ_COPROCESSOR		   45
++#define IRQMASK_COPROCESSOR	   (1 << (IRQ_COPROCESSOR - BW_CMP_NR_IRQS))
++#define IRQ_SOFT_INTR          45
++#define IRQMASK_SOFT_INTR      (1 << (IRQ_SOFT_INTR - BW_CMP_NR_IRQS))
++#define IRQ_MAIL_BOX           46
++#define IRQMASK_MAIL_BOX       (1 << (IRQ_MAIL_BOX - BW_CMP_NR_IRQS))
++#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define IRQ_AHBC               47
++#define IRQMASK_AHBC           (1 << (IRQ_AHBC - BW_CMP_NR_IRQS))
++#define IRQ_GPIO_L1            48
++#define IRQMASK_GPIO_L1        (1 << (IRQ_GPIO_L1 - BW_CMP_NR_IRQS))
++#define IRQ_GPIO_L3            49
++#define IRQMASK_GPIO_L3        (1 << (IRQ_GPIO_L3 - BW_CMP_NR_IRQS))
++#else
++#define IRQ_GPIO_L1            47
++#define IRQMASK_GPIO_L1        (1 << (IRQ_GPIO_L1 - BW_CMP_NR_IRQS))
++#define IRQ_GPIO_L3            48
++#define IRQMASK_GPIO_L3        (1 << (IRQ_GPIO_L3 - BW_CMP_NR_IRQS))
++#define IRQ_GPIO_M1            49
++#define IRQMASK_GPIO_M1        (1 << (IRQ_GPIO_M1 - BW_CMP_NR_IRQS))
++#endif
++#define IRQ_UART_UDMA_INT      50
++#define IRQMASK_UART_UDMA_INT  (1 << (IRQ_UART_UDMA_INT - BW_CMP_NR_IRQS))
++
++#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define IRQ_UARTINT5           51
++#define IRQMASK_UARTINT5       (1 << (IRQ_UARTINT5 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT6           52
++#define IRQMASK_UARTINT6       (1 << (IRQ_UARTINT6 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT7           53
++#define IRQMASK_UARTINT7       (1 << (IRQ_UARTINT7 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT8           54
++#define IRQMASK_UARTINT8       (1 << (IRQ_UARTINT8 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT9           55
++#define IRQMASK_UARTINT9       (1 << (IRQ_UARTINT9 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT10          56
++#define IRQMASK_UARTINT10      (1 << (IRQ_UARTINT10 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT11          57
++#define IRQMASK_UARTINT11      (1 << (IRQ_UARTINT11 - BW_CMP_NR_IRQS))
++#define IRQ_UARTINT12          58
++#define IRQMASK_UARTINT12      (1 << (IRQ_UARTINT12 - BW_CMP_NR_IRQS))
++#define IRQ_SPI_INT            59
++#define IRQMASK_SPI_INT        (1 << (IRQ_SPI_INT   - BW_CMP_NR_IRQS))
++#endif
++
++#ifdef CONFIG_SOC_AST3200
++#define IRQ_H264               61
++#define IRQMASK_H264           (1 << (IRQ_H264 - BW_CMP_NR_IRQS))
++
++#define IRQ_420_422            62
++#define IRQMASK_420_422        (1 << (IRQ_420_422 - BW_CMP_NR_IRQS))
++#define IRQ_P2X                63
++#define IRQMASK_P2X            (1 << (IRQ_P2X - BW_CMP_NR_IRQS))
++#endif
++
++/* Mask of valid system controller interrupts */
++/* VIC means VIC1 */
++#ifdef CONFIG_SOC_AST3100
++#define AST_VIC_VALID_INTMASK    ( \
++                                         IRQMASK_ECC | \
++                                         IRQMASK_MIC | \
++                                         (IRQMASK_MAC1 | IRQMASK_MAC2) | \
++                                         IRQMASK_HAC | \
++                                         IRQMASK_USB20 | \
++                                         (IRQMASK_UARTINT0 | IRQMASK_UARTINT4) | \
++                                         (IRQMASK_RFXV0 | IRQMASK_RFXV1) | \
++                                         IRQMASK_I2C | \
++                                         IRQMASK_USB11 | \
++                                         (IRQMASK_TIMERINT0 | IRQMASK_TIMERINT1 | IRQMASK_TIMERINT2) | \
++                                         IRQMASK_FLASH | \
++                                         IRQMASK_GPIO | \
++                                         IRQMASK_SCU | \
++                                         IRQ_RTC_ALARM | \
++                                         (IRQMASK_MAC3 | IRQMASK_MAC4) | \
++                                         IRQMASK_CRT | \
++                                         IRQMASK_SD | \
++                                         IRQMASK_WDT | \
++                                         IRQMASK_TACHO | \
++                                         IRQMASK_2D | \
++                                         IRQMASK_PCI | \
++                                         IRQMASK_ADC \
++                   )
++#define EXT_AST_VIC_VALID_INTMASK    ( \
++                                         IRQMASK_UARTINT1 | IRQMASK_UARTINT2 | IRQMASK_UARTINT3 | IRQMASK_SGPIO_MASTER | \
++                                         IRQMASK_PS2 \
++					)
++#else
++#ifdef CONFIG_SOC_AST3200
++#define AST_VIC_VALID_INTMASK    ( \
++                                         IRQMASK_ECC | \
++                                         IRQMASK_MIC | \
++                                         (IRQMASK_MAC1 | IRQMASK_MAC2) | \
++                                         IRQMASK_HAC | \
++                                         IRQMASK_USB20 | \
++                                         IRQMASK_USB20_2 | \
++                                         (IRQMASK_UARTINT0 | IRQMASK_UARTINT4) | \
++                                         (IRQMASK_RFXV0 | IRQMASK_RFXV1) | \
++                                         IRQMASK_I2C | \
++                                         IRQMASK_USB11 | \
++                                         (IRQMASK_TIMERINT0 | IRQMASK_TIMERINT1 | IRQMASK_TIMERINT2) | \
++                                         IRQMASK_FLASH | \
++                                         IRQMASK_GPIO | \
++                                         IRQMASK_SCU | \
++                                         IRQ_RTC_ALARM | \
++                                         (IRQMASK_MAC3 | IRQMASK_MAC4) | \
++                                         IRQMASK_CRT | \
++                                         IRQMASK_SD | \
++                                         IRQMASK_WDT | \
++                                         IRQMASK_TACHO | \
++                                         IRQMASK_2D | \
++                                         IRQMASK_PCI | \
++                                         IRQMASK_ADC \
++                   )
++#define EXT_AST_VIC_VALID_INTMASK    ( \
++                                         IRQMASK_UARTINT1 | IRQMASK_UARTINT2 | IRQMASK_UARTINT3 | IRQMASK_SGPIO_MASTER | \
++                                         IRQMASK_PS2 | IRQMASK_H264 | IRQMASK_420_422 | IRQMASK_P2X | IRQMASK_P2X_BRIDGE \
++					)
++#else /* Non CONFIG_SOC_AST3100 and CONFIG_SOC_AST3200 */
++
++#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++#define AST_VIC_VALID_INTMASK    ( \
++                                         IRQMASK_ECC | \
++                                         IRQMASK_MIC | \
++                                         (IRQMASK_MAC1 | IRQMASK_MAC2) | \
++                                         IRQMASK_HAC | \
++                                         IRQMASK_USB20 | \
++                                         IRQMASK_MDMA | \
++                                         IRQMASK_VIDEO | \
++                                         IRQMASK_LPC | \
++                                         (IRQMASK_UARTINT0 | IRQMASK_UARTINT4) | \
++                                         IRQMASK_I2C | \
++                                         IRQMASK_USB20_2 | \
++                                         IRQMASK_USB11 | \
++                                         IRQMASK_PECI | \
++                                         (IRQMASK_TIMERINT0 | IRQMASK_TIMERINT1 | IRQMASK_TIMERINT2) | \
++                                         IRQMASK_FLASH | \
++                                         IRQMASK_GPIO | \
++                                         IRQMASK_SCU | \
++                                         IRQ_RTC_ALARM | \
++                                         (IRQMASK_MAC3 | IRQMASK_MAC4) | \
++                                         IRQMASK_CRT | \
++                                         IRQMASK_SD | \
++                                         IRQMASK_WDT | \
++                                         IRQMASK_TACHO | \
++                                         IRQMASK_2D | \
++                                         IRQMASK_PCI  \
++                   )
++
++#else /* Non CONFIG_SOC_AST3100, CONFIG_SOC_AST3200 and CONFIG_SOC_AST2500 */
++#define AST_VIC_VALID_INTMASK    ( \
++                                         IRQMASK_ECC | \
++                                         IRQMASK_MIC | \
++                                         (IRQMASK_MAC1 | IRQMASK_MAC2) | \
++                                         IRQMASK_HAC | \
++                                         IRQMASK_USB20 | \
++                                         IRQMASK_MDMA | \
++                                         IRQMASK_VIDEO | \
++                                         IRQMASK_LPC | \
++                                         (IRQMASK_UARTINT0 | IRQMASK_UARTINT4) | \
++                                         IRQMASK_I2C | \
++                                         IRQMASK_USB1 | \
++                                         IRQMASK_PECI | \
++                                         (IRQMASK_TIMERINT0 | IRQMASK_TIMERINT1 | IRQMASK_TIMERINT2) | \
++                                         IRQMASK_FLASH | \
++                                         IRQMASK_GPIO | \
++                                         IRQMASK_SCU | \
++                                         IRQ_RTC_ALARM | \
++                                         (IRQMASK_MAC3 | IRQMASK_MAC4) | \
++                                         IRQMASK_CRT | \
++                                         IRQMASK_SD | \
++                                         IRQMASK_WDT | \
++                                         IRQMASK_TACHO | \
++                                         IRQMASK_2D | \
++                                         IRQMASK_PCI  \
++                   )
++#endif //CONFIG_SOC_AST2500
++#if !defined(CONFIG_SOC_AST2500) && !defined(CONFIG_SOC_AST2530)
++#define EXT_AST_VIC_VALID_INTMASK    ( \
++                                         IRQMASK_UARTINT1 | IRQMASK_UARTINT2 | IRQMASK_UARTINT3 | IRQMASK_SGPIO_MASTER | IRQMASK_JTAG_MASTER \
++					)
++#else
++#define EXT_AST_VIC_VALID_INTMASK    ( \
++                                         IRQMASK_UARTINT1 | IRQMASK_UARTINT2 | IRQMASK_UARTINT3 | IRQMASK_SGPIO_MASTER | IRQMASK_JTAG_MASTER | \
++                                         IRQMASK_UARTINT5 | IRQMASK_UARTINT6 | IRQMASK_UARTINT7 | IRQMASK_UARTINT8 | IRQMASK_UARTINT9 | \
++                                         IRQMASK_UARTINT10 | IRQMASK_UARTINT11 | IRQMASK_UARTINT12 | IRQMASK_UART_UDMA_INT | IRQMASK_MAIL_BOX | IRQMASK_MCTP \
++					)
++#endif					
++
++#endif //CONFIG_SOC_AST3200					
++#endif					
++#endif //_HWREG_ASTCOMMON_H_
+diff --git a/arch/arm/include/asm/soc-ast/hwreg.h b/arch/arm/include/asm/soc-ast/hwreg.h
+new file mode 100644
+index 0000000..ba7cd88
+--- /dev/null
++++ b/arch/arm/include/asm/soc-ast/hwreg.h
+@@ -0,0 +1,274 @@
++/*
++ *  This file contains the AST SOC Register locations
++ *
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#ifndef     _HWREG_ASTCOMMON_H_
++#define     _HWREG_ASTCOMMON_H_
++
++
++/* -----------------------------------------------------------------
++ *      	         SMC Registers
++ * -----------------------------------------------------------------
++*/
++#define SMC_CE0_SEGMENT_AC_TIMING_REG   (AST_SMC_VA_BASE + 0x00)
++#define SMC_CE0_CTRL_REG                (AST_SMC_VA_BASE + 0x04)
++#define SMC_CE1_CTRL_REG                (AST_SMC_VA_BASE + 0x08)
++#define SMC_CE2_CTRL_REG                (AST_SMC_VA_BASE + 0x0C)
++
++/* -----------------------------------------------------------------
++ *      	         AHB Registers
++ * -----------------------------------------------------------------
++*/
++#define AHB_PROTECTION_KEY_REG          (AST_AHBC_VA_BASE + 0x00)
++#define AHB_PRIORITY_CTRL_REG           (AST_AHBC_VA_BASE + 0x80)
++#define AHB_INTERRUPT_CTRL_REG          (AST_AHBC_VA_BASE + 0x88)
++#define AHB_ADDR_REMAP_REG              (AST_AHBC_VA_BASE + 0x8C)
++
++/* -----------------------------------------------------------------
++ *      	        SRAM Registers
++ * -----------------------------------------------------------------
++ */
++
++ /* -------------------------------------------------------------
++ *                  SDRAM Registers
++ * -------------------------------------------------------------
++ */
++#define SDRAM_PROTECTION_KEY_REG            (AST_SDRAMC_VA_BASE + 0x00)
++#define SDRAM_CONFIG_REG                    (AST_SDRAMC_VA_BASE + 0x04)
++#define SDRAM_GRAP_MEM_PROTECTION_REG       (AST_SDRAMC_VA_BASE + 0x08)
++#define SDRAM_REFRESH_TIMING_REG            (AST_SDRAMC_VA_BASE + 0x0C)
++#define SDRAM_NSPEED_REG1                   (AST_SDRAMC_VA_BASE + 0x10)
++#define SDRAM_LSPEED_REG1                   (AST_SDRAMC_VA_BASE + 0x14)
++#define SDRAM_NSPEED_REG2                   (AST_SDRAMC_VA_BASE + 0x18)
++#define SDRAM_LSPEED_REG2                   (AST_SDRAMC_VA_BASE + 0x1C)
++#define SDRAM_NSPEED_DELAY_CTRL_REG         (AST_SDRAMC_VA_BASE + 0x20)
++#define SDRAM_LSPEED_DELAY_CTRL_REG         (AST_SDRAMC_VA_BASE + 0x24)
++#define SDRAM_MODE_SET_CTRL_REG             (AST_SDRAMC_VA_BASE + 0x28)
++#define SDRAM_MRS_EMRS2_MODE_SET_REG        (AST_SDRAMC_VA_BASE + 0x2C)
++#define SDRAM_MRS_EMRS3_MODE_SET_REG        (AST_SDRAMC_VA_BASE + 0x30)
++#define SDRAM_PWR_CTRL_REG                  (AST_SDRAMC_VA_BASE + 0x34)
++#define SDRAM_PAGE_MISS_LATENCY_MASK_REG    (AST_SDRAMC_VA_BASE + 0x38)
++#define SDRAM_PRIORITY_GROUP_SET_REG        (AST_SDRAMC_VA_BASE + 0x3C)
++#define SDRAM_MAX_GRANT_LENGTH_REG1         (AST_SDRAMC_VA_BASE + 0x40)
++#define SDRAM_MAX_GRANT_LENGTH_REG2         (AST_SDRAMC_VA_BASE + 0x44)
++#define SDRAM_MAX_GRANT_LENGTH_REG3         (AST_SDRAMC_VA_BASE + 0x48)
++#define SDRAM_ECC_CTRL_STATUS_REG           (AST_SDRAMC_VA_BASE + 0x50)
++#define SDRAM_ECC_SEGMENT_EN_REG            (AST_SDRAMC_VA_BASE + 0x54)
++#define SDRAM_ECC_SCRUB_REQ_MASK_CTRL_REG   (AST_SDRAMC_VA_BASE + 0x58)
++#define SDRAM_ECC_ADDR_FIRST_ERR_REG        (AST_SDRAMC_VA_BASE + 0x5C)
++#define SDRAM_IO_BUFF_MODE_REG              (AST_SDRAMC_VA_BASE + 0x60)
++#define SDRAM_DLL_CTRL_REG1                 (AST_SDRAMC_VA_BASE + 0x64)
++#define SDRAM_DLL_CTRL_REG2                 (AST_SDRAMC_VA_BASE + 0x68)
++#define SDRAM_DLL_CTRL_REG3                 (AST_SDRAMC_VA_BASE + 0x6C)
++#define SDRAM_TEST_CTRL_STATUS_REG          (AST_SDRAMC_VA_BASE + 0x70)
++#define SDRAM_TEST_START_ADDR_LENGTH_REG    (AST_SDRAMC_VA_BASE + 0x74)
++#define SDRAM_TEST_FAIL_DQ_BIT_REG          (AST_SDRAMC_VA_BASE + 0x78)
++#define SDRAM_TEST_INIT_VALUE_REG           (AST_SDRAMC_VA_BASE + 0x7C)
++#define AST2100_COMPATIBLE_SCU_PASSWORD     (AST_SDRAMC_VA_BASE + 0x100)
++#define AST2100_COMPATIBLE_SCU_MPLL_PARA    (AST_SDRAMC_VA_BASE + 0x120)
++
++/*-------------------------------------------------------------------
++ *				    SCU Registers
++ *--------------------------------------------------------------------
++ */
++#define SCU_KEY_CONTROL_REG			    (AST_SCU_VA_BASE +  0x00)
++#define SCU_SYS_RESET_REG               (AST_SCU_VA_BASE +  0x04)
++#define SCU_CLK_SELECT_REG              (AST_SCU_VA_BASE +  0x08)
++#define SCU_CLK_STOP_REG                (AST_SCU_VA_BASE +  0x0C)
++#define SCU_OSC_COUNT_CTRL_REG			(AST_SCU_VA_BASE +  0x10)
++#define SCU_OSC_COUNT_VALUE_REG         (AST_SCU_VA_BASE +  0x14)
++#define SCU_INTR_CRTL_VALUE_REG         (AST_SCU_VA_BASE +  0x18)
++#define SCU_32CLK_ERR_CORRECT_REG       (AST_SCU_VA_BASE +  0x1C)
++#define SCU_M_PLL_PARAM_REG             (AST_SCU_VA_BASE +  0x20)
++#define SCU_H_PLL_PARAM_REG             (AST_SCU_VA_BASE +  0x24)
++#define SCU_FREQ_CNTR_CMP_REG           (AST_SCU_VA_BASE +  0x28)
++#define SCU_MISC_CTRL_REG               (AST_SCU_VA_BASE +  0x2C)
++#define SCU_SOC_SCRATCH1_REG            (AST_SCU_VA_BASE +  0x40)
++#define SCU_SOC_SCRATCH2_REG            (AST_SCU_VA_BASE +  0x44)
++#define SCU_HW_STRAPPING_REG            (AST_SCU_VA_BASE +  0x70)
++#define SCU_MULTIFUNCTION_PIN_REGISTER	(AST_SCU_VA_BASE +  0x74)
++#define SCU_HW_REVISION_CODE			(AST_SCU_VA_BASE +  0x7C)
++#define SCU_MULTI_FN_PIN_1              (AST_SCU_VA_BASE +  0x80)
++#define SCU_MULTI_FN_PIN_2              (AST_SCU_VA_BASE +  0x84)
++#define SCU_MULTI_FN_PIN_3              (AST_SCU_VA_BASE +  0x88)
++#define SCU_MULTI_FN_PIN_4              (AST_SCU_VA_BASE +  0x8C)
++#define SCU_MULTI_FN_PIN_5              (AST_SCU_VA_BASE +  0x90)
++#define SCU_MULTI_FN_PIN_6              (AST_SCU_VA_BASE +  0x94)
++#define SCU_PS2_PASSWORD				(AST_SCU_VA_BASE +  0xF0)
++
++/* -------------------------------------------------------------------
++ *  					Timer Registers
++ * -------------------------------------------------------------------
++ */
++#define TIMER1_COUNT_REG                (AST_TIMER_VA_BASE + 0x00)
++#define TIMER1_RELOAD_REG               (AST_TIMER_VA_BASE + 0x04)
++#define TIMER1_FIRST_MATCH_REG          (AST_TIMER_VA_BASE + 0x08)
++#define TIMER1_SEC_MATCH_REG            (AST_TIMER_VA_BASE + 0x0C)
++
++#define TIMER2_COUNT_REG                (AST_TIMER_VA_BASE + 0x10)
++#define TIMER2_RELOAD_REG               (AST_TIMER_VA_BASE + 0x14)
++#define TIMER2_FIRST_MATCH_REG          (AST_TIMER_VA_BASE + 0x18)
++#define TIMER2_SEC_MATCH_REG            (AST_TIMER_VA_BASE + 0x1C)
++
++#define TIMER3_COUNT_REG                (AST_TIMER_VA_BASE + 0x20)
++#define TIMER3_RELOAD_REG               (AST_TIMER_VA_BASE + 0x24)
++#define TIMER3_FIRST_MATCH_REG          (AST_TIMER_VA_BASE + 0x28)
++#define TIMER3_SEC_MATCH_REG            (AST_TIMER_VA_BASE + 0x2C)
++
++#define TIMER_CONTROL_REG               (AST_TIMER_VA_BASE + 0x30)
++
++/* -----------------------------------------------------------------
++ * 				 Interrupt Controller Register
++ * -----------------------------------------------------------------
++ */
++#define IRQ_STATUS_REG	                (AST_IC_VA_BASE + 0x00)
++#define FIQ_STATUS_REG	                (AST_IC_VA_BASE + 0x04)
++#define RAW_INT_STATUS_REG	            (AST_IC_VA_BASE + 0x08)
++#define IRQ_SELECT_REG	                (AST_IC_VA_BASE + 0x0C)
++#define IRQ_ENABLE_REG	                (AST_IC_VA_BASE + 0x10)
++#define IRQ_DISABLE_REG					(AST_IC_VA_BASE + 0x14)
++#define SOFT_INT_REG					(AST_IC_VA_BASE + 0x18)
++#define SOFT_INT_CLEAR_REG				(AST_IC_VA_BASE + 0x1C)
++#define PROTECT_ENABLE_REG				(AST_IC_VA_BASE + 0x20)
++#define INTERRUPT_SENS_REG				(AST_IC_VA_BASE + 0x24)
++#define INTERRUPT_BOTH_EDGE_TRIGGER_REG (AST_IC_VA_BASE + 0x28)
++#define INTERRUPT_EVENT_REG             (AST_IC_VA_BASE + 0x2C)
++#define EDGE_TRIGGERED_INTCLEAR_REG     (AST_IC_VA_BASE + 0x38)
++
++/* Interrupt Controllers */
++#define ASPEED_VIC_STATUS_OFFSET        0x00
++
++/* Interrupt Controllers 2 */
++#define ASPEED_VIC2_STATUS_OFFSET       0x84
++
++
++/* -----------------------------------------------------------------
++ * 				 Interrupt Controller Register for IRQ 32 - 44
++ * -----------------------------------------------------------------
++ */
++#define EXT_IRQ_SELECT_REG	            (AST_IC_VA_BASE + 0x9C)
++#define EXT_IRQ_ENABLE_REG 				(AST_IC_VA_BASE + 0xA4)
++#define EXT_IRQ_DISABLE_REG				(AST_IC_VA_BASE + 0xAC)
++#define EXT_EDGE_TRIGGERED_INTCLEAR_REG (AST_IC_VA_BASE + 0xDC)
++#define EXT_INTERRUPT_EVENT_REG         (AST_IC_VA_BASE + 0xD4)
++#define EXT_INTERRUPT_SENS_REG			(AST_IC_VA_BASE + 0xC4)
++
++
++/* --------------------------------------------------------------------
++ * 				 Interrupt Controller 2 Register
++ * --------------------------------------------------------------------
++ */
++#define VIC2_STATUS              (AST_GPIO_VA_BASE + 0x38)
++#define VIC2_RAW_STATUS          (AST_GPIO_VA_BASE + 0x38)
++#define VIC2_ENABLE_SET          (AST_GPIO_VA_BASE + 0x28)
++#define VIC2_ENABLE_CLEAR        (AST_GPIO_VA_BASE + 0x28)
++#define VIC2_SENSE               (AST_GPIO_VA_BASE + 0x30)
++#define VIC2_BOTH_EDGE		     (AST_GPIO_VA_BASE + 0x34)
++#define VIC2_EVENT               (AST_GPIO_VA_BASE + 0x2C)
++#define VIC2_EDGE_CLEAR          (AST_GPIO_VA_BASE + 0x38)
++
++/*---------------------------------------------------------------
++ *   GPIO Controllers Register
++ *  ------------------------------------------------------------
++ */
++#define GPIO_DATA_REG                   (AST_GPIO_VA_BASE + 0x00)
++#define GPIO_DIRECTION_REG              (AST_GPIO_VA_BASE + 0x04)
++
++/*---------------------------------------------------------------
++ *   I2C Controllers Register
++ *  ------------------------------------------------------------
++ */
++
++/*------------------------------------------------------------------
++ *   DMA Controllers Registers
++ *  ----------------------------------------------------------------
++ */
++
++/*------------------------------------------------------------------
++ *				 RTC Register Locations
++ *------------------------------------------------------------------*/
++
++
++/*------------------------------------------------------------------
++ *				 WDT Register Locations
++ *------------------------------------------------------------------*/
++#define WDT_CNT_STATUS_REG  (AST_WDT_VA_BASE + 0x00)
++#define WDT_RELOAD_REG		(AST_WDT_VA_BASE + 0x04)
++#define WDT_CNT_RESTART_REG (AST_WDT_VA_BASE + 0x08)
++#define WDT_CONTROL_REG		(AST_WDT_VA_BASE + 0x0C)
++#define WDT2_CNT_STATUS_REG (AST_WDT_VA_BASE + 0x20)
++#define WDT2_RELOAD_REG     (AST_WDT_VA_BASE + 0x24)
++#define WDT2_CNT_RESTART_REG (AST_WDT_VA_BASE + 0x28)
++#define WDT2_CONTROL_REG    (AST_WDT_VA_BASE + 0x2C)
++
++
++/*---------------------------------------------------------------
++ *   RFX Engine Register Locations
++ *  ------------------------------------------------------------
++ */
++#define RFX_FIFO_STAT_DEC_VER_REG       (AST_RFX_VA_BASE + 0x00)
++#define RFX_DRAM_BASE_ADDR_REG          (AST_RFX_VA_BASE + 0x04)
++#define RFX_ENGINE_READY_REG            (AST_RFX_VA_BASE + 0x08)
++#define RFX_ENGINE_STATUS_REG           (AST_RFX_VA_BASE + 0x0C)
++#define RFX_TS_BLOCKT_REG               (AST_RFX_VA_BASE + 0x10)
++#define RFX_TS_CODEC_CHANNELT_REG       (AST_RFX_VA_BASE + 0x14)
++#define RFX_TS_TILESET_1_REG            (AST_RFX_VA_BASE + 0x18)
++#define RFX_TS_TILESET_2_REG            (AST_RFX_VA_BASE + 0x1C)
++#define RFX_TS_TILESET_3_REG            (AST_RFX_VA_BASE + 0x20)
++#define RFX_TS_TILESET_4_REG            (AST_RFX_VA_BASE + 0x24)
++#define RFX_TS_TILE_1_REG               (AST_RFX_VA_BASE + 0x28)
++#define RFX_TS_TILE_2_REG               (AST_RFX_VA_BASE + 0x2C)
++#define RFX_TS_TILE_3_REG               (AST_RFX_VA_BASE + 0x30)
++#define RFX_TS_TILE_4_REG               (AST_RFX_VA_BASE + 0x34)
++#define RFX_TS_TILE_5_REG               (AST_RFX_VA_BASE + 0x38)
++#define RFX_DRAM_BASE_ADDR_LAST_REG     (AST_RFX_VA_BASE + 0x3C)
++#define RFX_PARAMETER_1_REG             (AST_RFX_VA_BASE + 0x40)
++#define RFX_PARAMETER_2_REG             (AST_RFX_VA_BASE + 0x44)
++#define RFX_INTR_CLR_REG                (AST_RFX_VA_BASE + 0x48)
++#define RFX_INTR_MASK_REG               (AST_RFX_VA_BASE + 0x4C)
++#define RFX_INTR_STAT_REG               (AST_RFX_VA_BASE + 0x50)
++#define RFX_QUANT_YL_REG                (AST_RFX_VA_BASE + 0x54)
++#define RFX_QUANT_YH_REG                (AST_RFX_VA_BASE + 0x58)
++#define RFX_QUANT_CBL_REG               (AST_RFX_VA_BASE + 0x5C)
++#define RFX_QUANT_CBH_REG               (AST_RFX_VA_BASE + 0x60)
++#define RFX_QUANT_CRL_REG               (AST_RFX_VA_BASE + 0x64)
++#define RFX_QUANT_CRH_REG               (AST_RFX_VA_BASE + 0x68)
++#define RFX_IDWT_FIFO_REG               (AST_RFX_VA_BASE + 0x6C)
++#define RFX_DRAM_FIFO_CTRL_REG          (AST_RFX_VA_BASE + 0x70)
++#define RFX_BASE_ADDR_Y_REG             (AST_RFX_VA_BASE + 0x80)
++#define RFX_BASE_ADDR_CB_REG            (AST_RFX_VA_BASE + 0x84)
++#define RFX_BASE_ADDR_CR_REG            (AST_RFX_VA_BASE + 0x88)
++#define RFX_BASE_ADDR_Y_1_REG           (AST_RFX_VA_BASE + 0x8C)
++#define RFX_BASE_ADDR_CB_1_REG          (AST_RFX_VA_BASE + 0x90)
++#define RFX_BASE_ADDR_CR_1_REG          (AST_RFX_VA_BASE + 0x94)
++#define RFX_BASE_ADDR_RECT_LIST_REG     (AST_RFX_VA_BASE + 0x98)
++#define RFX_DEC_CTRL_1_REG              (AST_RFX_VA_BASE + 0x9C)
++#define RFX_DEC_CTRL_2_REG              (AST_RFX_VA_BASE + 0xA0)
++#define RFX_BASE_ADDR_FRM_MASK_1_REG    (AST_RFX_VA_BASE + 0xA4)
++#define RFX_BASE_ADDR_FRM_MASK_2_REG    (AST_RFX_VA_BASE + 0xA8)
++#define RFX_FRM_MASK_LEN_REG            (AST_RFX_VA_BASE + 0xAC)
++#define RFX_POST_DEC_STAT_1_REG         (AST_RFX_VA_BASE + 0xC0)
++#define RFX_POST_DEC_STAT_2_REG         (AST_RFX_VA_BASE + 0xC4)
++#define RFX_POST_DEC_STAT_3_REG         (AST_RFX_VA_BASE + 0xC8)
++#define RFX_POST_DEC_STAT_4_REG         (AST_RFX_VA_BASE + 0xCC)
++#define RFX_POST_DEC_STAT_5_REG         (AST_RFX_VA_BASE + 0xD0)
++#define RFX_POST_DEC_STAT_6_REG         (AST_RFX_VA_BASE + 0xD4)
++#define RFX_POST_DEC_STAT_7_REG         (AST_RFX_VA_BASE + 0xD8)
++#define RFX_POST_DEC_STAT_8_REG         (AST_RFX_VA_BASE + 0xDC)
++#endif
+diff --git a/arch/arm/include/uapi/asm/setup.h b/arch/arm/include/uapi/asm/setup.h
+index 979ff40..bdf5ff4 100644
+--- a/arch/arm/include/uapi/asm/setup.h
++++ b/arch/arm/include/uapi/asm/setup.h
+@@ -143,6 +143,26 @@ struct tag_memclk {
+ 	__u32 fmemclk;
+ };
+ 
++
++/* ATAG to pass MAC address and count to OS - AMI Extension */
++#define ATAG_ENETADDR 0x41000901
++struct tag_enetaddr {
++   unsigned long enet_count;
++   unsigned char enet0_addr[6];
++   unsigned char enet1_addr[6];
++   unsigned char enet2_addr[6];
++   unsigned char enet3_addr[6];
++#ifdef   CONFIG_SPX_FEATURE_VIRTUAL_ETH_NET
++   unsigned char enet4_addr[6];
++   unsigned char enet5_addr[6];
++   unsigned char enet6_addr[6];
++   unsigned char enet7_addr[6];
++#endif   
++};
++extern unsigned long enetaddr[][6];
++
++
++
+ struct tag {
+ 	struct tag_header hdr;
+ 	union {
+@@ -165,6 +185,11 @@ struct tag {
+ 		 * DC21285 specific
+ 		 */
+ 		struct tag_memclk	memclk;
++
++		/*
++		 * AMI Extension 
++		 */
++		struct tag_enetaddr enetaddr;
+ 	} u;
+ };
+ 
+diff --git a/arch/arm/kernel/atags_parse.c b/arch/arm/kernel/atags_parse.c
+index 528f8af..9844ab9 100644
+--- a/arch/arm/kernel/atags_parse.c
++++ b/arch/arm/kernel/atags_parse.c
+@@ -140,6 +140,41 @@ static int __init parse_tag_cmdline(const struct tag *tag)
+ 
+ __tagtable(ATAG_CMDLINE, parse_tag_cmdline);
+ 
++#ifdef CONFIG_SPX_FEATURE_VIRTUAL_ETH_NET
++unsigned long enetaddr[8][6];
++EXPORT_SYMBOL (enetaddr);
++#else
++unsigned long enetaddr[4][6];
++#endif
++
++static int __init parse_tag_enetaddr(const struct tag *tag)
++{
++   if (tag->u.enetaddr.enet_count > 0)
++       memcpy(enetaddr[0],tag->u.enetaddr.enet0_addr,6);
++   if (tag->u.enetaddr.enet_count > 1)
++       memcpy(enetaddr[1],tag->u.enetaddr.enet1_addr,6);
++   if (tag->u.enetaddr.enet_count > 2)
++       memcpy(enetaddr[2],tag->u.enetaddr.enet2_addr,6);
++   if (tag->u.enetaddr.enet_count > 3)
++       memcpy(enetaddr[3],tag->u.enetaddr.enet3_addr,6);
++#ifdef CONFIG_SPX_FEATURE_VIRTUAL_ETH_NET
++   if (tag->u.enetaddr.enet_count > 4)
++       memcpy(enetaddr[4],tag->u.enetaddr.enet4_addr,6);
++   if (tag->u.enetaddr.enet_count > 5)
++       memcpy(enetaddr[5],tag->u.enetaddr.enet5_addr,6);
++   if (tag->u.enetaddr.enet_count > 6)
++       memcpy(enetaddr[6],tag->u.enetaddr.enet6_addr,6);
++   if (tag->u.enetaddr.enet_count > 7)
++       memcpy(enetaddr[7],tag->u.enetaddr.enet7_addr,6);
++#endif   
++   return 0;
++}
++__tagtable(ATAG_ENETADDR, parse_tag_enetaddr);
++
++
++
++
++
+ /*
+  * Scan the tag table for this tag, and call its parse function.
+  * The tag table is built by the linker from all the __tagtable
+diff --git a/arch/arm/mach-astevb/Makefile b/arch/arm/mach-astevb/Makefile
+new file mode 100644
+index 0000000..997faf4
+--- /dev/null
++++ b/arch/arm/mach-astevb/Makefile
+@@ -0,0 +1,9 @@
++#
++# Makefile for the linux kernel.
++#
++
++# Object file lists.
++
++obj-y					:= setup.o irq.o time.o
++obj-$(CONFIG_SOC_AST3100)		+= usbhost.o
++obj-$(CONFIG_SOC_AST3200)		+= usbhost.o
+diff --git a/arch/arm/mach-astevb/Makefile.boot b/arch/arm/mach-astevb/Makefile.boot
+new file mode 100644
+index 0000000..8408d33
+--- /dev/null
++++ b/arch/arm/mach-astevb/Makefile.boot
+@@ -0,0 +1,4 @@
++   zreladdr-y	:= 0x40008000
++params_phys-y	:= 0x40000100
++initrd_phys-y	:= 0x41000000
++
+diff --git a/arch/arm/mach-astevb/include/mach/astmacdef.h b/arch/arm/mach-astevb/include/mach/astmacdef.h
+new file mode 100644
+index 0000000..d33997a
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/astmacdef.h
+@@ -0,0 +1,31 @@
++/*
++ *  This file contains the AST MAC Hardware description
++ *
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#ifndef ASTMAC_DEF_H
++#define ASTMAC_DEF_H
++
++/*****************************************************************
++							Network  Setting
++*****************************************************************/
++#define  MAX_ASTMAC 1
++const unsigned long  astmac_io[MAX_ASTMAC]  = {AST_MAC_VA_BASE};
++const unsigned short astmac_irq[MAX_ASTMAC] = {IRQ_MAC};
++
++#endif
+diff --git a/arch/arm/mach-astevb/include/mach/bits.h b/arch/arm/mach-astevb/include/mach/bits.h
+new file mode 100644
+index 0000000..09b024e
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/bits.h
+@@ -0,0 +1,61 @@
++/*
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++/* DO NOT EDIT!! - this file automatically generated
++ *                 from .s file by awk -f s2h.awk
++ */
++/*  Bit field definitions
++ *  Copyright (C) ARM Limited 1998. All rights reserved.
++ */
++
++#ifndef __bits_h
++#define __bits_h                        1
++
++#define BIT0                            0x00000001
++#define BIT1                            0x00000002
++#define BIT2                            0x00000004
++#define BIT3                            0x00000008
++#define BIT4                            0x00000010
++#define BIT5                            0x00000020
++#define BIT6                            0x00000040
++#define BIT7                            0x00000080
++#define BIT8                            0x00000100
++#define BIT9                            0x00000200
++#define BIT10                           0x00000400
++#define BIT11                           0x00000800
++#define BIT12                           0x00001000
++#define BIT13                           0x00002000
++#define BIT14                           0x00004000
++#define BIT15                           0x00008000
++#define BIT16                           0x00010000
++#define BIT17                           0x00020000
++#define BIT18                           0x00040000
++#define BIT19                           0x00080000
++#define BIT20                           0x00100000
++#define BIT21                           0x00200000
++#define BIT22                           0x00400000
++#define BIT23                           0x00800000
++#define BIT24                           0x01000000
++#define BIT25                           0x02000000
++#define BIT26                           0x04000000
++#define BIT27                           0x08000000
++#define BIT28                           0x10000000
++#define BIT29                           0x20000000
++#define BIT30                           0x40000000
++#define BIT31                           0x80000000
++
++#endif
++
++/*         END */
+diff --git a/arch/arm/mach-astevb/include/mach/debug-macro.S b/arch/arm/mach-astevb/include/mach/debug-macro.S
+new file mode 100644
+index 0000000..e204a62
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/debug-macro.S
+@@ -0,0 +1,41 @@
++/* linux/include/asm-arm/arch-xxx/debug-macro.S
++ *
++ * Debugging macro include header
++ *
++ * Copyright (C) 1994-1999 Russell King
++ *
++ * Ported for ASPEED SOC (Base code taken from arch-integrator)
++ * Copyright (C) 2005 American Megatrends Inc.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++*/
++
++#include <mach/lowlevel_serial.h>
++
++mmu_enabled:
++		.word	io_mapping_done
++
++		.macro	addruart, rp, rv, temp
++		ldr	\rp, =UART_BASE		@ physical address
++		ldr	\rv, =UART_MMU_BASE	@ virtual address
++		.endm
++
++		.macro	senduart,rd,rx
++		strb	\rd, [\rx, #SERIAL_THR]
++		.endm
++
++		.macro	waituart,rd,rx
++1001:	ldr		\rd, [\rx, #SERIAL_LSR]
++		tst		\rd, #1 << 5			@ UART_LSR_THRE
++		beq		1001b
++		.endm
++
++/* I dont know what busyuart should do. So I used the same as waituart */
++		.macro	busyuart,rd,rx
++1001:	ldr		\rd, [\rx, #SERIAL_LSR]
++		tst		\rd, #1 << 5			@ UART_LSR_THRE
++		beq		1001b
++		.endm
+diff --git a/arch/arm/mach-astevb/include/mach/dma.h b/arch/arm/mach-astevb/include/mach/dma.h
+new file mode 100644
+index 0000000..5fce5db
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/dma.h
+@@ -0,0 +1,27 @@
++/*
++ *  linux/include/asm-arm/arch-xxx/dma.h
++ *
++ *  Copyright (C) 1997,1998 Russell King
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++#ifndef __ASM_ARCH_DMA_H
++#define __ASM_ARCH_DMA_H
++
++#define MAX_DMA_ADDRESS		0xffffffff
++#define MAX_DMA_CHANNELS	0
++
++#endif /* _ASM_ARCH_DMA_H */
++
+diff --git a/arch/arm/mach-astevb/include/mach/entry-macro.S b/arch/arm/mach-astevb/include/mach/entry-macro.S
+new file mode 100644
+index 0000000..d2f1700
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/entry-macro.S
+@@ -0,0 +1,79 @@
++/* include/asm-arm/arch-xxx/entry-macro.S
++ *
++ * Low-level IRQ helper macros for Aspeed SOC  platforms
++ *
++ * This file is licensed under  the terms of the GNU General Public
++ * License version 2. This program is licensed "as is" without any
++ * warranty of any kind, whether express or implied.
++ */
++
++#include <mach/platform.h>
++
++		.macro	disable_fiq
++		.endm
++
++		.macro	get_irqnr_preamble, base, tmp
++		ldr	\base, =IO_ADDRESS(AST_IC_VA_BASE)
++		.endm
++
++		.macro	arch_ret_to_user, tmp1, tmp2
++		.endm
++
++		.macro	get_irqnr_and_base, irqnr, irqstat, base, tmp
++		ldr	\tmp, =IO_ADDRESS(AST_SCU_VA_BASE)
++		ldr	\irqnr, [\tmp, #0x44]
++		cmp	\irqnr, #0
++		beq	2000f
++		
++1000: /* pass1 */
++		cmp	\irqnr, #32
++		ble 1001f
++		ldr	\tmp, =IO_ADDRESS(AST_IC_VA_BASE)
++		ldr	\irqstat, [\tmp, #ASPEED_VIC2_STATUS_OFFSET]
++		sub	\irqnr, \irqnr, #32		
++		mov	\tmp, #32
++		sub	\tmp, \tmp, \irqnr
++		mov \irqstat, \irqstat, lsl \tmp	/* mask uncompare parts */
++		mov \irqstat, \irqstat, lsr \tmp
++		mov \irqnr, #63
++		clz \tmp, \irqstat
++		cmp \tmp, #32
++		bne 3000f
++		mov \irqnr, #32
++1001:
++		ldr \tmp, =IO_ADDRESS(AST_IC_VA_BASE)
++		ldr \irqstat, [\tmp, #ASPEED_VIC_STATUS_OFFSET]
++		mov \tmp, #32
++		sub \tmp, \tmp, \irqnr		
++		mov \irqstat, \irqstat, lsl \tmp	/* mask uncompare parts */
++		mov \irqstat, \irqstat, lsr \tmp
++		mov \irqnr, #31
++		clz \tmp, \irqstat
++		cmp \tmp, #32
++		bne 3000f
++
++2000: /* pass 2 */
++		ldr \tmp, =IO_ADDRESS(AST_IC_VA_BASE)
++		ldr \irqstat, [\tmp, #ASPEED_VIC2_STATUS_OFFSET]
++		mov \irqnr, #63
++		clz \tmp, \irqstat
++		cmp \tmp, #32
++		bne 3000f
++2001:
++		ldr \tmp, =IO_ADDRESS(AST_IC_VA_BASE)
++		ldr \irqstat, [\tmp, #ASPEED_VIC_STATUS_OFFSET]
++		mov \irqnr, #31
++		clz \tmp, \irqstat
++		cmp \tmp, #32
++		beq 4000f /* not find */
++
++3000: /* find */
++		sub \irqnr, \irqnr, \tmp
++		ldr \tmp, =IO_ADDRESS(AST_SCU_VA_BASE)
++		str \irqnr, [\tmp, #0x44]
++		cmp \irqnr, #64
++4000: /* done */
++		.endm
++
++		.macro	irq_prio_table
++		.endm
+diff --git a/arch/arm/mach-astevb/include/mach/hardware.h b/arch/arm/mach-astevb/include/mach/hardware.h
+new file mode 100644
+index 0000000..d96046a
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/hardware.h
+@@ -0,0 +1,48 @@
++/*
++ *  linux/include/asm-arm/arch-ast3100evb/hardware.h
++ *
++ *  This file contains the hardware definitions of the AST 2000 EVB
++ *
++ *  Copyright (C) 1999 ARM Limited.
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++#ifndef __ASM_ARCH_HARDWARE_H
++#define __ASM_ARCH_HARDWARE_H
++
++#include <asm/sizes.h>
++#include <mach/platform.h>
++
++/*****************************************************************
++							IO Mapping
++ All registers (128MB) and flash (max 128MB) should fit within
++ 256MB @ 0xF0000000
++ Mem address Range
++		 Virt = 0xF0000000 to 0xFFFFFFFF
++	     Phys = 0x10000000 to 0x1FFFFFFF
++ IO address Range
++		 Virt = 0xF7000000 to 0xFEFFFFFF
++         Phys = 0x16000000 to 0x1EFFFFFF
++*****************************************************************/
++#define IO_BASE			0xF0000000                 // VA of IO
++#define MEM_ADDRESS(x)  ((x&0x00ffffff)+IO_BASE)
++#define IO_ADDRESS(x)   ((x&0x0fffffff)+IO_BASE)
++#define PHY_ADDRESS(x)  ((x&0x0fffffff)+0x10000000)
++
++#define PCIMEM_SIZE		0x01000000
++#define PCIMEM_BASE		0xf0000000
++
++#endif
+diff --git a/arch/arm/mach-astevb/include/mach/io.h b/arch/arm/mach-astevb/include/mach/io.h
+new file mode 100644
+index 0000000..71abffb
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/io.h
+@@ -0,0 +1,20 @@
++/*
++ * linux/include/asm-arm/arch-xxx/io.h
++ *
++ *  Copyright (C) 2001  MontaVista Software, Inc.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++
++#ifndef __ASM_ARCH_IO_H
++#define __ASM_ARCH_IO_H
++
++#define IO_SPACE_LIMIT      0x0000ffff      //0xffffffff -> this is org vincent
++#define __io(a)				((void __iomem *)((a)))
++#define __mem_pci(a)		(a)
++
++extern void EarlyPrintk(char *);
++
++#endif
+diff --git a/arch/arm/mach-astevb/include/mach/irqs.h b/arch/arm/mach-astevb/include/mach/irqs.h
+new file mode 100644
+index 0000000..706b78d
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/irqs.h
+@@ -0,0 +1,29 @@
++/*
++ *  linux/include/asm-arm/arch-xxx/irqs.h
++ *
++ *  Copyright (C) 1999 ARM Limited
++ *  Copyright (C) 2000 Deep Blue Solutions Ltd.
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++/*
++ *  Interrupt numbers
++ */
++#include <mach/platform.h>
++
++/* This may be changed depending upon programming of each device */
++#define IRQ_EDGE_INTR_LIST			0
+diff --git a/arch/arm/mach-astevb/include/mach/lowlevel_serial.h b/arch/arm/mach-astevb/include/mach/lowlevel_serial.h
+new file mode 100644
+index 0000000..4d0cffa
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/lowlevel_serial.h
+@@ -0,0 +1,26 @@
++/*
++ * linux/include/asm-arm/arch-xxx/lowlevel_serial.h
++ *
++ * Copyright (C) 2005 American Megatrends Inc.
++ */
++
++/* Used during bootup till the serial driver is initialized */
++/* Included in debug_macro.S and uncompress.h */
++#include  "mach/platform.h"
++
++#define UART_BASE	AST_UART5_BASE /* before MMU */
++#define UART_MMU_BASE	AST_UART5_VA_BASE /* after MMU */
++
++#define BAUD_RATE	CONFIG_SPX_FEATURE_BAUDRATE_CONSOLE_TTY
++
++#define SERIAL_THR	0x00
++#define SERIAL_RBR	0x00
++#define SERIAL_DLL	0x00
++#define SERIAL_DLM	0x04
++#define SERIAL_IER	0x04
++#define SERIAL_IIR	0x08
++#define SERIAL_FCR	0x08
++#define SERIAL_LCR	0x0C
++#define SERIAL_LSR	0x14
++#define SERIAL_MSR	0x18
++#define SERIAL_SPR	0x1C
+diff --git a/arch/arm/mach-astevb/include/mach/memory.h b/arch/arm/mach-astevb/include/mach/memory.h
+new file mode 100644
+index 0000000..5f95fdf
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/memory.h
+@@ -0,0 +1,38 @@
++/*
++ *  linux/include/asm-arm/arch-xxx/memory.h
++ *
++ *  Copyright (C) 1999 ARM Limited
++ *  Copyright (C) 2005 American Megatrends Inc.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++#ifndef __ASM_ARCH_MEMORY_H
++#define __ASM_ARCH_MEMORY_H
++
++/*
++ * Physical DRAM offset.
++ */
++#define PHYS_OFFSET	UL(0x40000000)
++#define BUS_OFFSET	UL(0x40000000)
++
++
++#define __virt_to_bus(x)	((x) - PAGE_OFFSET + BUS_OFFSET)
++#define __bus_to_virt(x)	((x) - BUS_OFFSET + PAGE_OFFSET)
++
++#define __virt_to_phys(x)	((x) - PAGE_OFFSET + PHYS_OFFSET)
++#define __phys_to_virt(x)	((x) - PHYS_OFFSET + PAGE_OFFSET)
++
++
++#endif
+diff --git a/arch/arm/mach-astevb/include/mach/param.h b/arch/arm/mach-astevb/include/mach/param.h
+new file mode 100644
+index 0000000..854eb21
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/param.h
+@@ -0,0 +1,20 @@
++/*
++ *  linux/include/asm-arm/arch-xxx/param.h
++ *
++ *  Copyright (C) 1999 ARM Limited
++ *  Copyright (C) 2005 American Megatrends Inc.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
+diff --git a/arch/arm/mach-astevb/include/mach/platform.h b/arch/arm/mach-astevb/include/mach/platform.h
+new file mode 100644
+index 0000000..f11549d
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/platform.h
+@@ -0,0 +1,33 @@
++/*
++ *  linux/include/asm-arm/arch-astvb/platform.h
++ *
++ *  This file contains the AST SOC specific values
++ *
++ *  Copyright (C) 1999 ARM Limited.
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#ifndef     _PLATFORM_ASTEVB_H_
++#define     _PLATFORM_ASTEVB_H_
++
++#include <mach/hardware.h>
++
++#include <asm/soc-ast/hwmap.h>
++#include <asm/soc-ast/hwreg.h>
++#include <asm/soc-ast/hwdef.h>
++
++#endif
+diff --git a/arch/arm/mach-astevb/include/mach/serial.h b/arch/arm/mach-astevb/include/mach/serial.h
+new file mode 100644
+index 0000000..d58e73c
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/serial.h
+@@ -0,0 +1,54 @@
++/*
++ *  linux/include/asm-arm/arch-xxx/serial.h
++ *
++ *  This file contains the ASPEED SOC Serial port configuration
++ *  This serial port is similiar to UART 8250
++ *
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++
++#include <linux/serial_core.h>
++#include <mach/hardware.h>
++
++#define BASE_BAUD	((CONFIG_UART_CLK)/16)
++
++#define STD_COM_FLAGS (UPF_BOOT_AUTOCONF | UPF_SKIP_TEST)
++
++#if !defined(CONFIG_SOC_AST2530)
++#define SERIAL_PORT_DFNS    \
++ {0, BASE_BAUD, AST_UART1_BASE, IRQ_UARTINT0, STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART1_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART2_BASE, IRQ_UARTINT1, STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART2_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART3_BASE, IRQ_UARTINT2, STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART3_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART4_BASE, IRQ_UARTINT3, STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART4_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART5_BASE, IRQ_UARTINT4, STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART5_VA_BASE, 2},
++#else
++#define SERIAL_PORT_DFNS    \
++ {0, BASE_BAUD, AST_UART1_BASE,  IRQ_UARTINT0,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART1_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART2_BASE,  IRQ_UARTINT1,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART2_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART3_BASE,  IRQ_UARTINT2,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART3_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART4_BASE,  IRQ_UARTINT3,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART4_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART5_BASE,  IRQ_UARTINT4,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART5_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART6_BASE,  IRQ_UARTINT5,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART6_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART7_BASE,  IRQ_UARTINT6,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART7_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART8_BASE,  IRQ_UARTINT7,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART8_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART9_BASE,  IRQ_UARTINT8,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART9_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART10_BASE, IRQ_UARTINT9,  STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART10_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART11_BASE, IRQ_UARTINT10, STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART11_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART12_BASE, IRQ_UARTINT11, STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART12_VA_BASE, 2},   \
++ {0, BASE_BAUD, AST_UART13_BASE, IRQ_UARTINT12, STD_COM_FLAGS, 0, UPIO_MEM32, (void *) AST_UART13_VA_BASE, 2},
++#endif
+diff --git a/arch/arm/mach-astevb/include/mach/system.h b/arch/arm/mach-astevb/include/mach/system.h
+new file mode 100644
+index 0000000..93b2b88
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/system.h
+@@ -0,0 +1,84 @@
++/*
++ *  linux/include/asm-arm/arch-xxx/system.h
++ *
++ *  Copyright (C) 1999 ARM Limited
++ *  Copyright (C) 2000 Deep Blue Solutions Ltd
++ *	Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++#ifndef __ASM_ARCH_SYSTEM_H
++#define __ASM_ARCH_SYSTEM_H
++
++#include <mach/platform.h>
++
++/* Some Debug Functions */
++void CheckPrintk(char *);
++
++static inline void arch_idle(void)
++{
++	/*
++	 * This should do all the clock switching
++	 * and wait for interrupt tricks
++	 */
++	cpu_do_idle();
++}
++
++static inline void arch_reset(char mode)
++{
++#if !defined(CONFIG_SOC_AST3100) && !defined(CONFIG_SOC_AST3200)
++    /* 
++     * Fix Linux Host OS hang. 
++     * BMC reset will clear LADR3H/LADR3L/LADR12H/LADR12L. 
++     * If BMC reset coincidentally launches at the 2nd LPC clock of a 
++     * decoded KCS/BT turn-around cycle, AST2300/2400 LPC controller will enter a wait state.
++     * And the wait state is not initialized by the BMC reset. It causes Linux Host OS hang
++     */
++ 	unsigned long reg;
++
++    reg = *((volatile unsigned long*)(AST_LPC_VA_BASE + 0x150));
++    if (!(reg & 0x00000080))
++    {
++        reg |= 0x00000080;
++    }
++    *((volatile unsigned long *)(AST_LPC_VA_BASE + 0x150)) = reg;
++
++    reg = *((volatile unsigned long *)(AST_LPC_VA_BASE + 0x140));
++    reg &= ~(0x00000003);
++    *((volatile unsigned long *)(AST_LPC_VA_BASE + 0x140)) = reg;
++
++    reg = *((volatile unsigned long*) AST_LPC_VA_BASE); /* HICR0 = Disable LPC channel #1 #2 #3 */ 
++    reg &= 0xffffff1f; /* HICR0 = Disable LPC channel #1 #2 #3 */
++    *((volatile unsigned long*) AST_LPC_VA_BASE) = reg;
++    reg = *((volatile unsigned long*) AST_LPC_VA_BASE + 0x10); /* HICR4 = Disable KCS interface and BT interface in channel #3*/
++    reg &= 0xfffffffa; /* HICR4 = Disable Enable KCS interface and BT interface in channel #3*/
++    *((volatile unsigned long*) AST_LPC_VA_BASE + 0x10) = reg;
++#endif
++
++	/*
++	 * Use WDT to restart system
++	 */
++#ifdef CONFIG_SPX_FEATURE_SELECT_WDT2
++    *(volatile unsigned long *) (WDT_RELOAD_REG) = 0x10;
++    *(volatile unsigned long *) (WDT_CNT_RESTART_REG) = 0x4755;
++    *(volatile unsigned long *) (WDT_CONTROL_REG) = 0x03;
++#else
++    *(volatile unsigned long *) (WDT2_RELOAD_REG) = 0x10;
++    *(volatile unsigned long *) (WDT2_CNT_RESTART_REG) = 0x4755;
++    *(volatile unsigned long *) (WDT2_CONTROL_REG) = 0x03;
++#endif
++}
++
++#endif
+diff --git a/arch/arm/mach-astevb/include/mach/timex.h b/arch/arm/mach-astevb/include/mach/timex.h
+new file mode 100644
+index 0000000..bd0b004
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/timex.h
+@@ -0,0 +1,25 @@
++/*
++ *  linux/include/asm-arm/arch-xxx/timex.h
++ *
++ *  ASPEED SOC architecture timex specifications
++ *
++ *  Copyright (C) 1999 ARM Limited
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#include <mach/platform.h>
++
++#define CLOCK_TICK_RATE		CONFIG_TIMER_CLK
+diff --git a/arch/arm/mach-astevb/include/mach/uncompress.h b/arch/arm/mach-astevb/include/mach/uncompress.h
+new file mode 100644
+index 0000000..fcd6012
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/uncompress.h
+@@ -0,0 +1,63 @@
++/*
++ * linux/include/asm-arm/arch-xxx/uncompress.h
++ *
++ * Copyright (C) 2005 American Megatrends Inc.
++ */
++
++#include <mach/hardware.h>
++#include <mach/lowlevel_serial.h>
++#include <linux/serial_reg.h>
++
++#define flush()  do { } while(0)
++
++static void putc(const char c)
++{
++	volatile unsigned int status;
++
++	/* Wait for Ready */
++	do {
++    	status = *((volatile unsigned char *) (UART_BASE + SERIAL_LSR));
++    } while (!(status & UART_LSR_THRE));
++
++	/* Write Character */
++	*((volatile unsigned char *) (UART_BASE + SERIAL_THR)) = c;
++}
++
++#if 0
++static void putstr(const char *s)
++{
++	while (*s) {
++		putc(*s);
++		if (*s == '\n')
++			putc('\r');
++		s++;
++	}
++}
++#endif
++
++static __inline__ void arch_decomp_setup(void)
++{
++
++	/* Set the proper clock Divisor - Clear bit 12 */
++	*((volatile unsigned long *) (0x1e6e2000)) = 0x1688A8A8;
++	*((volatile unsigned long *) (0x1e6e202c)) &= 0xFFFFEFFF;
++	*((volatile unsigned long *) (0x1e6e2000)) = 0;
++
++	/* Enable DLAB, 8 Bits and One Stop Bit */
++	*((volatile unsigned char *) (UART_BASE + SERIAL_LCR)) = 0x83;
++
++	/* Set the Baud Rate */
++	*((volatile unsigned char *) (UART_BASE + SERIAL_DLM)) = ((CONFIG_UART_CLK / (BAUD_RATE * 16)) & 0xFF00) >> 8;
++	*((volatile unsigned char *) (UART_BASE + SERIAL_DLL)) = ((CONFIG_UART_CLK / (BAUD_RATE * 16)) & 0x00FF);
++
++	/* Disable  DLAB, 8 Bits and 1 Stop Bit */
++	*((volatile unsigned char *) (UART_BASE + SERIAL_LCR)) = 0x03;
++
++	/* Enable FIFO */
++	*((volatile unsigned char *) (UART_BASE + SERIAL_FCR)) = 0xC1;
++}
++
++/*
++ * nothing to do
++ */
++#define arch_decomp_wdog()
+diff --git a/arch/arm/mach-astevb/include/mach/vmalloc.h b/arch/arm/mach-astevb/include/mach/vmalloc.h
+new file mode 100644
+index 0000000..29db4f7
+--- /dev/null
++++ b/arch/arm/mach-astevb/include/mach/vmalloc.h
+@@ -0,0 +1,20 @@
++/*
++ *  linux/include/asm-arm/arch-xxx/vmalloc.h
++ *
++ *  Copyright (C) 2000 Russell King.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++#define VMALLOC_END       (PAGE_OFFSET + 0x20000000)
+diff --git a/arch/arm/mach-astevb/irq.c b/arch/arm/mach-astevb/irq.c
+new file mode 100644
+index 0000000..c2fcedb
+--- /dev/null
++++ b/arch/arm/mach-astevb/irq.c
+@@ -0,0 +1 @@
++#include "../soc-ast/ast-irq.c"
+diff --git a/arch/arm/mach-astevb/setup.c b/arch/arm/mach-astevb/setup.c
+new file mode 100644
+index 0000000..fcb4974
+--- /dev/null
++++ b/arch/arm/mach-astevb/setup.c
+@@ -0,0 +1,287 @@
++/*********************************************************************************  
++ *************** IMPORTANT NOTE:  READ THIS BEFORE EDITING THIS FILE  ************
++ *********************************************************************************
++ *	This file is same across AST2300/AST2400/AST3100 (except MACHINE_START Values)       *
++ *	Make sure the changes are done on the files for all SOC mentioned above      *  
++ *********************************************************************************
++*/
++/*
++ *  linux/arch/arm/mach-astevb/setup.c
++ *
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the"14M"
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ *
++ */
++#include <linux/mm.h>
++#include <linux/init.h>
++#include <linux/major.h>
++#include <linux/fs.h>
++#include <linux/device.h>
++#include <linux/serial.h>
++#include <linux/tty.h>
++#include <linux/serial_core.h>
++#include <linux/dma-contiguous.h>
++#include <linux/platform_device.h>
++
++#include <asm/io.h>
++#include <asm/pgtable.h>
++#include <asm/page.h>
++#include <asm/mach/map.h>
++#include <asm/setup.h>
++#include <asm/system.h>
++#include <asm/memory.h>
++#include <mach/hardware.h>
++#include <asm/mach-types.h>
++#include <asm/mach/arch.h>
++
++static struct map_desc astevb_std_desc[] __initdata = {
++	{ AST_SMC_VA_BASE,             __phys_to_pfn(AST_SMC_BASE),            SZ_4K,		MT_DEVICE},
++	{ AST_FMC_VA_BASE,             __phys_to_pfn(AST_FMC_BASE),            SZ_4K,		MT_DEVICE},
++	{ AST_AHBC_VA_BASE,            __phys_to_pfn(AST_AHBC_BASE),           SZ_64K,		MT_DEVICE},
++	{ AST_MAC1_VA_BASE,            __phys_to_pfn(AST_MAC1_BASE),		   SZ_64K,		MT_DEVICE},
++	{ AST_MAC2_VA_BASE,            __phys_to_pfn(AST_MAC2_BASE),		   SZ_64K,		MT_DEVICE},
++#if (CONFIG_SPX_FEATURE_GLOBAL_NIC_COUNT >= 3)	
++	{ AST_MAC3_VA_BASE,           __phys_to_pfn(AST_MAC3_BASE),            SZ_64K,      MT_DEVICE},  
++	{ AST_MAC4_VA_BASE,           __phys_to_pfn(AST_MAC4_BASE),            SZ_64K,      MT_DEVICE},    
++#endif    	
++#if defined(CONFIG_SOC_AST3100) || defined(CONFIG_SOC_AST3200) || defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++	{ AST_USB20_VA_BASE,           __phys_to_pfn(AST_USB20_BASE),          SZ_4K,		MT_DEVICE},
++#else
++    { AST_USB20_VA_BASE,           __phys_to_pfn(AST_USB20_BASE),          SZ_8K,		MT_DEVICE},
++#endif
++#if defined(CONFIG_SOC_AST3200) || defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++	{ AST_USB20_1_VA_BASE,         __phys_to_pfn(AST_USB20_1_BASE),        SZ_4K,		MT_DEVICE},
++	{ AST_USB20_2_VA_BASE,         __phys_to_pfn(AST_USB20_2_BASE),        SZ_4K,		MT_DEVICE},
++#endif
++#ifdef CONFIG_SOC_AST3200
++	{ AST_PCIE_VA_BASE,            __phys_to_pfn(AST_PCIE_BASE),           SZ_4K,		MT_DEVICE},
++#endif
++	{ AST_USB11_VA_BASE,           __phys_to_pfn(AST_USB11_BASE),          SZ_64K,		MT_DEVICE},
++	{ AST_IC_VA_BASE,			   __phys_to_pfn(AST_IC_BASE),			   SZ_64K,		MT_DEVICE},
++	{ AST_SDRAMC_VA_BASE,          __phys_to_pfn(AST_SDRAMC_BASE),         SZ_4K,		MT_DEVICE},
++	{ AST_SCU_VA_BASE,			   __phys_to_pfn(AST_SCU_BASE),		       SZ_4K,		MT_DEVICE},
++	{ AST_CRYPTO_VA_BASE,          __phys_to_pfn(AST_CRYPTO_BASE),         SZ_4K,		MT_DEVICE},
++	{ AST_JTAG_VA_BASE,		       __phys_to_pfn(AST_JTAG_BASE),		   SZ_4K,		MT_DEVICE}, 
++	{ AST_GRAPHIC_VA_BASE,         __phys_to_pfn(AST_GRAPHIC_BASE),        SZ_4K,		MT_DEVICE},
++	{ AST_ADC_VA_BASE,             __phys_to_pfn(AST_ADC_BASE),            SZ_4K,		MT_DEVICE},
++	{ AST_AHB_TO_PBUS_VA_BASE,     __phys_to_pfn(AST_AHB_TO_PBUS_BASE),	   SZ_64K,		MT_DEVICE},
++	{ AST_MDMA_VA_BASE,            __phys_to_pfn(AST_MDMA_BASE),           SZ_64K,		MT_DEVICE},
++	{ AST_2D_VA_BASE,              __phys_to_pfn(AST_2D_BASE),             SZ_64K,		MT_DEVICE},
++	{ AST_GPIO_VA_BASE,            __phys_to_pfn(AST_GPIO_BASE),           SZ_4K,		MT_DEVICE},
++	{ AST_RTC_VA_BASE,             __phys_to_pfn(AST_RTC_BASE),            SZ_4K,		MT_DEVICE},
++	{ AST_TIMER_VA_BASE,		   __phys_to_pfn(AST_TIMER_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_UART1_VA_BASE,           __phys_to_pfn(AST_UART1_BASE),          SZ_4K,		MT_DEVICE},
++	{ AST_UART2_VA_BASE,           __phys_to_pfn(AST_UART2_BASE),          SZ_4K,		MT_DEVICE},
++	{ AST_UART3_VA_BASE,           __phys_to_pfn(AST_UART3_BASE),          SZ_4K,		MT_DEVICE},
++	{ AST_UART4_VA_BASE,           __phys_to_pfn(AST_UART4_BASE),          SZ_4K,		MT_DEVICE},
++	{ AST_UART5_VA_BASE,           __phys_to_pfn(AST_UART5_BASE),          SZ_4K,		MT_DEVICE},
++	{ AST_WDT_VA_BASE,			    __phys_to_pfn(AST_WDT_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_PWM_VA_BASE,             __phys_to_pfn(AST_PWM_BASE),            SZ_4K,		MT_DEVICE},
++	{ AST_I2C_VA_BASE,             __phys_to_pfn(AST_I2C_BASE),		       SZ_4K,		MT_DEVICE},
++	{ AST_SPI_FLASH_VA_BASE,       __phys_to_pfn(AST_SPI_FLASH_BASE),      SZ_64M,		MT_DEVICE},
++
++#if !defined(CONFIG_SOC_AST3100) && !defined(CONFIG_SOC_AST3200)
++	{ AST_DMA_VA_BASE,	           __phys_to_pfn(AST_DMA_BASE),	           SZ_4K,		MT_DEVICE},
++	{ AST_MCTP_VA_BASE,		       __phys_to_pfn(AST_MCTP_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_LPC_PLUS_VA_BASE,	       __phys_to_pfn(AST_LPC_PLUS_BASE),	   SZ_4K,		MT_DEVICE},
++	{ AST_VIDEO_VA_BASE,	       __phys_to_pfn(AST_VIDEO_BASE),		   SZ_128K,	MT_DEVICE},
++	{ AST_PECI_VA_BASE,		       __phys_to_pfn(AST_PECI_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_VUART0_VA_BASE,	       __phys_to_pfn(AST_VUART0_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_VUART1_VA_BASE,	       __phys_to_pfn(AST_VUART1_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_LPC_VA_BASE,		       __phys_to_pfn(AST_LPC_BASE),		       SZ_4K,		MT_DEVICE},
++	{ AST_USB1_VA_BASE,		       __phys_to_pfn(AST_USB1_BASE),		   SZ_4K,		MT_DEVICE},
++	
++#endif
++
++#if defined(CONFIG_SOC_AST2530)
++	{ AST_UART6_VA_BASE,	       __phys_to_pfn(AST_UART6_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_UART7_VA_BASE,	       __phys_to_pfn(AST_UART7_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_UART8_VA_BASE,	       __phys_to_pfn(AST_UART8_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_UART9_VA_BASE,	       __phys_to_pfn(AST_UART9_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_UART10_VA_BASE,	       __phys_to_pfn(AST_UART10_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_UART11_VA_BASE,	       __phys_to_pfn(AST_UART11_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_UART12_VA_BASE,	       __phys_to_pfn(AST_UART12_BASE),		   SZ_4K,		MT_DEVICE},
++	{ AST_UART13_VA_BASE,	       __phys_to_pfn(AST_UART13_BASE),		   SZ_4K,		MT_DEVICE},
++#endif
++#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++	{ AST_UART_UDMA_VA_BASE,       __phys_to_pfn(AST_UART_UDMA_BASE),	   SZ_4K,		MT_DEVICE},
++#endif
++
++#if defined(CONFIG_SOC_AST3100) || defined(CONFIG_SOC_AST3200)
++	{ AST_PS2_VA_BASE,             __phys_to_pfn(AST_PS2_BASE),             SZ_4K,		MT_DEVICE},
++	{ AST_RFX_VA_BASE,             __phys_to_pfn(AST_RFX_BASE),             SZ_4K,		MT_DEVICE},
++#endif
++#ifdef CONFIG_SOC_AST3200
++	{ AST_H264_VA_BASE,            __phys_to_pfn(AST_H264_BASE),            SZ_4K,		MT_DEVICE},
++#endif
++};
++
++int io_mapping_done = 0;
++
++/*
++static struct uart_port early_serial_ports[] = {
++	{
++		.membase	= (char *)AST_UART1_VA_BASE,
++		.mapbase	= AST_UART1_BASE,
++		.irq		= IRQ_UART1,
++		.flags		= UPF_SKIP_TEST,
++		.iotype		= UPIO_PORT,
++		.regshift	= 2,
++		.uartclk	= CONFIG_UART_CLK,
++		.line		= 0,
++		.type		= PORT_16550A,
++		.fifosize	= 16
++	}
++};
++*/
++
++/*
++extern void printascii(char *Str);
++
++void
++EarlyPrintk(char *Str)
++{
++	printascii(Str);
++}
++*/
++
++static inline void ast_arch_idle(void)
++{
++        /*
++         * This should do all the clock switching
++         * and wait for interrupt tricks
++         */
++        cpu_do_idle();
++}
++
++static void ast_arch_reset(enum reboot_mode reboot_mode, const char *cmd)
++{
++    /*
++     *      * Use WDT to restart system
++     *           */
++#ifdef CONFIG_SPX_FEATURE_SELECT_WDT2
++    *(volatile unsigned long *) (WDT_RELOAD_REG) = 0x10;
++    *(volatile unsigned long *) (WDT_CNT_RESTART_REG) = 0x4755;
++    *(volatile unsigned long *) (WDT_CONTROL_REG) = 0x03;
++#else
++    *(volatile unsigned long *) (WDT2_RELOAD_REG) = 0x10;
++    *(volatile unsigned long *) (WDT2_CNT_RESTART_REG) = 0x4755;
++    *(volatile unsigned long *) (WDT2_CONTROL_REG) = 0x03;
++#endif
++}
++
++#if defined(CONFIG_SOC_AST3100) || defined(CONFIG_SOC_AST3200)
++void ast_ehci_init(void);
++void ast_uhci_init(void);
++#ifdef CONFIG_SOC_AST3200
++extern void ast_add_device_pcie(void);
++#endif
++#endif
++
++#ifdef CONFIG_SPX_FEATURE_PACKAGES_SSP_SUPPORT
++static struct platform_device ssp_device = {
++	.name	= "ssp-device",
++	.dev	= {
++		.coherent_dma_mask	= 0xFF000000UL,
++	},
++};
++#endif
++
++void __init astevb_init(void)
++{
++	/* Register idle and restart handler */
++	arm_pm_idle = ast_arch_idle;
++	arm_pm_restart = ast_arch_reset;
++	/* Do any initial hardware setup if needed */
++
++#ifdef CONFIG_SPX_FEATURE_PACKAGES_SSP_SUPPORT
++	platform_device_register(&ssp_device);
++#endif
++
++#if defined(CONFIG_SOC_AST3100) || defined(CONFIG_SOC_AST3200)
++	/* Register EHCI and UHCI Host devices */
++	ast_ehci_init();
++	ast_uhci_init();
++
++#ifdef CONFIG_SOC_AST3200
++	/* Register PCIe devices */
++	ast_add_device_pcie();
++#endif
++#endif
++
++}
++
++#ifdef CONFIG_SPX_FEATURE_PACKAGES_SSP_SUPPORT
++#define DMA_ALLOC_BASE "0x86400000"
++#define DMA_ALLOC_SIZE "14M"
++static void __init ssp_reserve_cma(void)
++{
++	int ret;
++	phys_addr_t ssp_base = 0;
++	unsigned long ssp_size = 0;
++
++	ssp_base = memparse(DMA_ALLOC_BASE, NULL);
++	ssp_size = memparse(DMA_ALLOC_SIZE, NULL);
++	printk("SSP reserved %ld @ %p - %p\n", ssp_size, (void*)ssp_base, (void*)ssp_base + ssp_size);
++	ret = dma_declare_contiguous(&ssp_device.dev, ssp_size, ssp_base, 0);
++	if(ret)
++		printk("%s: dma_declare_contiguous failed %d\n", __func__, ret);
++}
++#endif
++
++void __init astevb_map_io(void)
++{
++	/* Do any initial hardware setup if needed */
++	iotable_init(astevb_std_desc, ARRAY_SIZE(astevb_std_desc));
++	io_mapping_done = 1;
++//	early_serial_setup(&early_serial_ports[0]);
++}
++
++extern void ast_timer_init(void);
++extern void ast_init_irq(void);
++
++#ifdef CONFIG_SOC_AST3100
++MACHINE_START(AST3100EVB, "AST3100EVB")
++#endif
++#ifdef CONFIG_SOC_AST2300
++MACHINE_START(AST2300EVB, "AST2300EVB")
++#endif
++#ifdef CONFIG_SOC_AST2400
++MACHINE_START(AST2400EVB, "AST2400EVB")
++#endif
++#ifdef CONFIG_SOC_AST1250
++MACHINE_START(AST1250EVB, "AST1250EVB")
++#endif
++#ifdef CONFIG_SOC_AST2500
++MACHINE_START(AST2500EVB, "AST2500EVB")
++#endif
++#ifdef CONFIG_SOC_AST2530
++MACHINE_START(AST2530EVB, "AST2530EVB")
++#endif
++#ifdef CONFIG_SOC_AST3200
++MACHINE_START(AST3200EVB, "AST3200EVB")
++#endif
++	/* Note: 512 Mb of Register space is mapped during init, so that we can use
++         serial port and check point display to output debug info */
++	.map_io		= astevb_map_io,
++	.init_time	= ast_timer_init,
++	.init_irq	= ast_init_irq,
++	.atag_offset	= 0x100,
++	.init_machine	= astevb_init,
++#ifdef CONFIG_SPX_FEATURE_PACKAGES_SSP_SUPPORT
++.reserve		= ssp_reserve_cma,
++#endif
++MACHINE_END
+diff --git a/arch/arm/mach-astevb/time.c b/arch/arm/mach-astevb/time.c
+new file mode 100644
+index 0000000..c846411
+--- /dev/null
++++ b/arch/arm/mach-astevb/time.c
+@@ -0,0 +1 @@
++#include "../soc-ast/ast-time.c"
+diff --git a/arch/arm/mm/Kconfig b/arch/arm/mm/Kconfig
+index 7eb94e6..fd4440b 100644
+--- a/arch/arm/mm/Kconfig
++++ b/arch/arm/mm/Kconfig
+@@ -127,7 +127,8 @@ config CPU_ARM925T
+ 
+ # ARM926T
+ config CPU_ARM926T
+-	bool "Support ARM926T processor" if ARCH_INTEGRATOR || MACH_REALVIEW_EB
++	bool "Support ARM926T processor" if ARCH_INTEGRATOR || MACH_REALVIEW_EB || SOC_AST2300 || SOC_AST2400 || SOC_AST3100 
++	default y if  SOC_AST2300 || SOC_AST2400 || SOC_AST3100
+ 	select CPU_32v5
+ 	select CPU_ABRT_EV5TJ
+ 	select CPU_CACHE_VIVT
+diff --git a/arch/arm/soc-ast/ast-irq.c b/arch/arm/soc-ast/ast-irq.c
+new file mode 100644
+index 0000000..b9a7367
+--- /dev/null
++++ b/arch/arm/soc-ast/ast-irq.c
+@@ -0,0 +1,96 @@
++/*
++ *  linux/arch/arm/soc-ast/ast-irq.c
++ *
++ *  Copyright (C) 2005 American Megatrends Inc
++ *
++ *  AST SOC IRQ handling functions
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#include <linux/init.h>
++#include <linux/interrupt.h>
++#include <linux/list.h>
++#include <linux/irq.h>
++
++#include <asm/irq.h>
++#include <mach/hardware.h>
++#include <asm/mach-types.h>
++
++static void ast_irq_mask (struct irq_data *d)
++{
++	if (d->irq > NR_IRQS)
++		return;
++	
++	if(d->irq < BW_CMP_NR_IRQS)
++		*((volatile unsigned long *) IRQ_DISABLE_REG) |= (1 << d->irq);
++	else
++		*((volatile unsigned long *) EXT_IRQ_DISABLE_REG) |= (1 << (d->irq - BW_CMP_NR_IRQS));
++}
++
++static void ast_irq_unmask (struct irq_data *d)
++{
++	if (d->irq > NR_IRQS)
++		return;
++	if(d->irq < BW_CMP_NR_IRQS)
++		*((volatile unsigned long *) IRQ_ENABLE_REG) |= (1 << d->irq);
++	else
++		*((volatile unsigned long *) EXT_IRQ_ENABLE_REG) |= (1 << (d->irq - BW_CMP_NR_IRQS));			
++}
++
++struct irq_chip ext_chip = {
++	.irq_ack    = ast_irq_mask,
++	.irq_mask   = ast_irq_mask,
++	.irq_unmask = ast_irq_unmask,
++};
++
++void __init ast_init_irq(void)
++{
++	int i;
++
++	printk("AST Interrupt Controller Enabled\n");
++	/* Set the trigger level and modes of the interrupts */
++	*(volatile unsigned long *) (IRQ_SELECT_REG)  = 0;
++	*(volatile unsigned long *) (IRQ_ENABLE_REG) = 0;
++	*(volatile unsigned long *) (IRQ_DISABLE_REG) = 0xFFFFFFFF;
++	*(volatile unsigned long *) (EDGE_TRIGGERED_INTCLEAR_REG) = 0xFFFFFFFF;
++
++	*(volatile unsigned long *) (EXT_IRQ_SELECT_REG)  = 0;
++	*(volatile unsigned long *) (EXT_IRQ_ENABLE_REG) = 0;
++	*(volatile unsigned long *) (EXT_IRQ_DISABLE_REG) = 0xFFFFFFFF;
++	*(volatile unsigned long *) (EXT_EDGE_TRIGGERED_INTCLEAR_REG) = 0xFFFFFFFF;
++
++	for (i = 0; i < NR_IRQS; i ++)
++	{
++		if(i < BW_CMP_NR_IRQS)
++		{
++        		if ((1 << i) & AST_VIC_VALID_INTMASK)
++			{
++				irq_set_chip_and_handler(i, &ext_chip, handle_level_irq);
++				//irq_set_chip_and_handler(i, &ext_chip, handle_edge_irq);
++				set_irq_flags(i, IRQF_VALID | IRQF_PROBE);
++			}
++		}
++		else
++		{
++			if ((1 << (i - BW_CMP_NR_IRQS)) & EXT_AST_VIC_VALID_INTMASK)
++			{
++				irq_set_chip_and_handler(i, &ext_chip, handle_level_irq);
++				//irq_set_chip_and_handler(i, &ext_chip, handle_edge_irq);
++				set_irq_flags(i, IRQF_VALID | IRQF_PROBE);
++			}
++		}
++	}
++}
+diff --git a/arch/arm/soc-ast/ast-time.c b/arch/arm/soc-ast/ast-time.c
+new file mode 100644
+index 0000000..c8329e2
+--- /dev/null
++++ b/arch/arm/soc-ast/ast-time.c
+@@ -0,0 +1,124 @@
++/*
++ *  linux/arch/arm/soc-ast/ast-time.c
++ *
++ *  Copyright (C) 2009 American Megatrends Inc
++ *
++ *  AST SOC timer functions
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#include <linux/kernel.h>
++#include <linux/interrupt.h>
++#include <linux/time.h>
++#include <linux/init.h>
++#include <linux/timex.h>
++#include <linux/smp.h>
++#include <mach/hardware.h>
++#include <asm/io.h>
++#include <asm/irq.h>
++#include <asm/uaccess.h>
++#include <asm/mach/irq.h>
++#include <asm/mach/time.h>
++
++
++#define TIMER_RELOAD	((1*1000*1000) / 100)
++#define TICKS_PER_uSEC  1		/* ASPEED_EXTCLK / 10 ^ 6 */
++#define TICKS2USECS(x)	((x) / TICKS_PER_uSEC)
++
++#if 0  // Newer kernels  don't use this 
++/* Returns number of us since last clock interrupt. Note the
++   interrupts will be disabled before calling this function */
++static unsigned long ast_gettimeoffset(void)
++{
++	unsigned long ticks1, ticks2, status;
++
++	/*
++	 * Get the current number of ticks.  Note that there is a race
++	 * condition between us reading the timer and checking for
++	 * an interrupt.  We get around this by ensuring that the
++	 * counter has not reloaded between our two reads.
++	 */
++	ticks2 = *(volatile unsigned long*)TIMER1_COUNT_REG;
++	do {
++		ticks1 = ticks2;
++		status = __raw_readl(RAW_INT_STATUS_REG);
++		ticks2 = *(volatile unsigned long*)TIMER1_COUNT_REG;
++	} while (ticks2 > ticks1);
++
++	/*
++	 * Number of ticks since last interrupt.
++	 */
++	ticks1 = TIMER_RELOAD - ticks2;
++
++	/*
++	 * Interrupt pending?  If so, we've reloaded once already.
++	 */
++	if (status & IRQMASK_TIMERINT0)
++		ticks1 += TIMER_RELOAD;
++
++	/*
++	 * Convert the ticks to usecs
++	 */
++	return TICKS2USECS(ticks1);
++}
++#endif
++
++static irqreturn_t ast_timer_interrupt(int irq, void *dev_id)
++{
++	/*
++	 * clear the interrupt
++	 */
++	*(volatile unsigned long *)(EDGE_TRIGGERED_INTCLEAR_REG) |= IRQMASK_TIMERINT0;
++
++	/*
++	 * the clock tick routines are only processed on the
++	 * primary CPU
++	 */
++	timer_tick();
++
++	return IRQ_HANDLED;
++}
++
++static struct irqaction ast_timer_irq = {
++	.name		= "AST Timer Tick",
++	.flags		= IRQF_DISABLED|IRQF_TIMER|IRQF_IRQPOLL,
++	.handler	= ast_timer_interrupt,
++};
++
++void __init ast_timer_init(void)
++{
++	/* Disable all timer and interrups */
++	*((volatile unsigned long *) TIMER_CONTROL_REG) = 0;
++	/* Clear Interrupt */
++	*((volatile unsigned long *) EDGE_TRIGGERED_INTCLEAR_REG) |= IRQMASK_TIMERINT0;
++
++	/* Load counter values */
++	*((volatile unsigned long *) TIMER1_RELOAD_REG) = TIMER_RELOAD - 1;
++	*((volatile unsigned long *) TIMER1_COUNT_REG) = TIMER_RELOAD - 1;
++
++	/* Enable Interrupts and timer */
++	*((volatile uint32_t *) TIMER_CONTROL_REG) = TIMER1_ENABLE | TIMER1_CLOCK_SELECT | TIMER1_INTR_ENABLE;
++	*((volatile uint32_t *) INTERRUPT_SENS_REG) = 0x0;
++	*((volatile uint32_t *) INTERRUPT_BOTH_EDGE_TRIGGER_REG) = 0x0;
++	*((volatile uint32_t *) INTERRUPT_EVENT_REG) = 0x00010000;
++
++	/* Setup Timer Interrupt routine */
++	IRQ_SET_RISING_EDGE(IRQ_TIMERINT0);
++	setup_irq(IRQ_TIMERINT0, &ast_timer_irq);
++
++	printk("AST Timer Enabled\n");
++}
++
+diff --git a/arch/arm/tools/mach-types b/arch/arm/tools/mach-types
+index a10297d..d996e8c 100644
+--- a/arch/arm/tools/mach-types
++++ b/arch/arm/tools/mach-types
+@@ -189,7 +189,8 @@ nxdkn			MACH_NXDKN		NXDKN			880
+ palmtx			MACH_PALMTX		PALMTX			885
+ s3c2413			MACH_S3C2413		S3C2413			887
+ wg302v2			MACH_WG302V2		WG302V2			890
+-omap_2430sdp		MACH_OMAP_2430SDP	OMAP_2430SDP		900
++#omap_2430sdp		MACH_OMAP_2430SDP	OMAP_2430SDP		900
++ast2400evb     MACH_AST2400EVB     AST2400EVB      900
+ davinci_evm		MACH_DAVINCI_EVM	DAVINCI_EVM		901
+ palmz72			MACH_PALMZ72		PALMZ72			904
+ nxdb500			MACH_NXDB500		NXDB500			905
+@@ -1007,3 +1008,4 @@ eco5_bx2		MACH_ECO5_BX2		ECO5_BX2		4572
+ eukrea_cpuimx28sd	MACH_EUKREA_CPUIMX28SD	EUKREA_CPUIMX28SD	4573
+ domotab			MACH_DOMOTAB		DOMOTAB			4574
+ pfla03			MACH_PFLA03		PFLA03			4575
++
+-- 
+1.9.1
+

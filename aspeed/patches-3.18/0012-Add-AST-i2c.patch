@@ -1,0 +1,353 @@
+From 25fa6f95665f7b4ba0c71a0c954bbd7fc1a62ab2 Mon Sep 17 00:00:00 2001
+From: "Anton D. Kachalov" <mouse@yandex-team.ru>
+Date: Tue, 24 May 2016 19:40:10 +0300
+Subject: [PATCH 12/14] Add AST i2c
+
+Signed-off-by: Anton D. Kachalov <mouse@yandex-team.ru>
+---
+ drivers/i2c/Makefile   |   1 +
+ drivers/i2c/i2c-core.c | 151 +++++++++++++++++++++++++++++++++++++++++++++++--
+ drivers/i2c/i2c-dev.c  |  56 +++++++++++++++---
+ 3 files changed, 197 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/i2c/Makefile b/drivers/i2c/Makefile
+index 1722f50..60495a3 100644
+--- a/drivers/i2c/Makefile
++++ b/drivers/i2c/Makefile
+@@ -11,4 +11,5 @@ obj-y				+= algos/ busses/ muxes/
+ obj-$(CONFIG_I2C_STUB)		+= i2c-stub.o
+ 
+ ccflags-$(CONFIG_I2C_DEBUG_CORE) := -DDEBUG
++ccflags-y += -DI2C_BUS_RECOVERY
+ CFLAGS_i2c-core.o := -Wno-deprecated-declarations
+diff --git a/drivers/i2c/i2c-core.c b/drivers/i2c/i2c-core.c
+index 7bd1b5c..d51d725 100644
+--- a/drivers/i2c/i2c-core.c
++++ b/drivers/i2c/i2c-core.c
+@@ -49,6 +49,7 @@
+ #include <linux/acpi.h>
+ #include <linux/jump_label.h>
+ #include <asm/uaccess.h>
++#include <linux/i2c-dev.h>   // For IOCTL defines
+ 
+ #include "i2c-core.h"
+ 
+@@ -1982,6 +1983,43 @@ static void __exit i2c_exit(void)
+ 	tracepoint_synchronize_unregister();
+ }
+ 
++#ifdef I2C_BUS_RECOVERY
++int i2c_recovery_event(void)
++{
++	int id, ret;
++	struct i2c_adapter	*adap;
++
++	for (id = 0; id < MAX_I2C_ADAPTERS; id++)
++	{
++		adap = i2c_get_adapter(id);
++		if (adap != NULL)
++		{
++			if (adap->algo->i2c_recovery)
++			{
++				if (in_atomic() || irqs_disabled())
++				{
++					ret = rt_mutex_trylock(&adap->bus_lock);
++					if (!ret)
++					{
++						i2c_put_adapter(adap);
++						continue;
++					}
++				}
++				else
++				{
++					rt_mutex_lock(&adap->bus_lock);
++				}
++				ret = adap->algo->i2c_recovery(adap);
++				rt_mutex_unlock(&adap->bus_lock);
++			}
++			i2c_put_adapter(adap);
++		}
++	}
++
++	return 0;
++}
++#endif
++
+ /* We must initialize early, because some subsystems register i2c drivers
+  * in subsys_initcall() code, but are linked (and initialized) before i2c.
+  */
+@@ -2108,6 +2146,95 @@ int i2c_transfer(struct i2c_adapter *adap, struct i2c_msg *msgs, int num)
+ }
+ EXPORT_SYMBOL(i2c_transfer);
+ 
++/* AMI Extended IOCTLS */
++int i2c_ioctl(struct i2c_adapter * adap,unsigned long cmd, unsigned long arg)
++{
++	switch (cmd)
++	{
++		case I2C_SLAVEREAD:
++			/* IMPORTANT NOTE:
++			   Why we don't lock slave xfer functions?
++
++			   All SPX compliant i2c hardware should never access hardware.
++			   Instead they sleep for slave buffers gets filled up.
++
++			   Since they does access hardware, locking is not needed to
++			   prevent master and slave access to hardware. Also if we lock
++			   the master xfers cannot be done as the slave routines does not
++			   return if if does not have slave data.
++			*/
++			if (adap->algo->slave_recv)
++			{
++				char *tmp;
++				int ret;
++				tmp = kmalloc(MAX_IPMB_MSG_SIZE,GFP_KERNEL);
++				if (!tmp)
++					return -ENOMEM;
++				ret = adap->algo->slave_recv(adap,tmp,MAX_IPMB_MSG_SIZE);
++				if (ret > 0)
++					ret = copy_to_user((char *)arg,tmp,ret)?-EFAULT:ret;
++				kfree(tmp);
++				return ret;
++			}
++			break;
++
++		case SMBUS_HOST_NOTIFY:
++			if (adap->algo->smb_slave_recv)
++			{
++				char 	*tmp;
++				int 	ret = 0;
++				int     count = 0;
++				tmp = kmalloc(MAX_IPMB_MSG_SIZE, GFP_KERNEL);
++				if (tmp==NULL)
++					return -ENOMEM;
++
++				ret = adap->algo->smb_slave_recv(adap,tmp,count);
++				if (ret > 0)
++					ret = copy_to_user((unsigned char __user *)arg,tmp,ret)?-EFAULT:ret;
++#ifdef DEBUG
++				printk (KERN_DEBUG "ret value returned in slave receive call = 0x%x\n", ret);
++#endif
++				kfree(tmp);
++				return ret;
++			}
++			break;
++
++		/* UNTESTED CODE :We don't have any scenario to test slave writes */
++#if 1
++		case I2C_SLAVEWRITE:
++			if (adap->algo->slave_send)
++			{
++				char *tmp;
++				int ret;
++				tmp = kmalloc(MAX_IPMB_MSG_SIZE,GFP_KERNEL);
++				if (!tmp)
++					return -ENOMEM;
++				ret = copy_from_user(tmp,(char *)arg,MAX_IPMB_MSG_SIZE)?-EFAULT:0;
++				if (ret == -EFAULT)
++				{
++					kfree(tmp);
++					return -EFAULT;
++				}
++				return adap->algo->slave_send(adap,tmp,MAX_IPMB_MSG_SIZE);
++			}
++			break;
++#endif
++		default:
++			if (adap->algo->i2c_hw_ioctl)
++				return adap->algo->i2c_hw_ioctl(adap,cmd,arg);
++			break;
++	}
++
++	/* NOTE:  returning a fault code here could cause trouble
++	 * in buggy userspace code.  Some old kernel bugs returned
++	 * zero in this case, and userspace code might accidentally
++	 * have depended on that bug.
++	 */
++	return -ENOTTY;
++}
++
++EXPORT_SYMBOL(i2c_ioctl);
++
+ /**
+  * i2c_master_send - issue a single I2C message in master transmit mode
+  * @client: Handle to slave device
+@@ -2371,7 +2498,17 @@ struct i2c_adapter *i2c_get_adapter(int nr)
+ {
+ 	struct i2c_adapter *adapter;
+ 
+-	mutex_lock(&core_lock);
++//	mutex_lock(&core_lock);
++	if (in_atomic() || irqs_disabled())
++	{
++		int ret;
++		ret = mutex_trylock(&core_lock);
++		if (!ret)
++			return NULL;
++	}
++	else
++		mutex_lock(&core_lock);
++
+ 	adapter = idr_find(&i2c_adapter_idr, nr);
+ 	if (adapter && !try_module_get(adapter->owner))
+ 		adapter = NULL;
+@@ -2414,7 +2551,7 @@ static u8 i2c_smbus_pec(u8 crc, u8 *p, size_t count)
+ }
+ 
+ /* Assume a 7-bit address, which is reasonable for SMBus */
+-static u8 i2c_smbus_msg_pec(u8 pec, struct i2c_msg *msg)
++u8 i2c_smbus_msg_pec(u8 pec, struct i2c_msg *msg)
+ {
+ 	/* The address will be sent first */
+ 	u8 addr = (msg->addr << 1) | !!(msg->flags & I2C_M_RD);
+@@ -2425,7 +2562,7 @@ static u8 i2c_smbus_msg_pec(u8 pec, struct i2c_msg *msg)
+ }
+ 
+ /* Used for write only transactions */
+-static inline void i2c_smbus_add_pec(struct i2c_msg *msg)
++void i2c_smbus_add_pec(struct i2c_msg *msg)
+ {
+ 	msg->buf[msg->len] = i2c_smbus_msg_pec(0, msg);
+ 	msg->len++;
+@@ -2436,7 +2573,7 @@ static inline void i2c_smbus_add_pec(struct i2c_msg *msg)
+    partial CRC from the write part into account.
+    Note that this function does modify the message (we need to decrease the
+    message length to hide the CRC byte from the caller). */
+-static int i2c_smbus_check_pec(u8 cpec, struct i2c_msg *msg)
++int i2c_smbus_check_pec(u8 cpec, struct i2c_msg *msg)
+ {
+ 	u8 rpec = msg->buf[--msg->len];
+ 	cpec = i2c_smbus_msg_pec(cpec, msg);
+@@ -2900,7 +3037,13 @@ trace:
+ 
+ 	return res;
+ }
++EXPORT_SYMBOL(i2c_smbus_msg_pec);
++EXPORT_SYMBOL(i2c_smbus_add_pec);
++EXPORT_SYMBOL(i2c_smbus_check_pec);
+ EXPORT_SYMBOL(i2c_smbus_xfer);
++#ifdef I2C_BUS_RECOVERY
++EXPORT_SYMBOL(i2c_recovery_event);
++#endif
+ 
+ MODULE_AUTHOR("Simon G. Vogl <simon@tk.uni-linz.ac.at>");
+ MODULE_DESCRIPTION("I2C-Bus main module");
+diff --git a/drivers/i2c/i2c-dev.c b/drivers/i2c/i2c-dev.c
+index 71c7a39..1cb9384 100644
+--- a/drivers/i2c/i2c-dev.c
++++ b/drivers/i2c/i2c-dev.c
+@@ -35,6 +35,10 @@
+ #include <linux/jiffies.h>
+ #include <linux/uaccess.h>
+ 
++#ifdef I2C_BUS_RECOVERY
++static struct 	timer_list poll_timer;
++#endif
++
+ /*
+  * An i2c_dev represents an i2c_adapter ... an I2C or SMBus master, not a
+  * slave (i2c_client) with which messages will be exchanged.  It's coupled
+@@ -368,7 +372,7 @@ static noinline int i2cdev_ioctl_smbus(struct i2c_client *client,
+ 		/* These are special: we do not use data */
+ 		return i2c_smbus_xfer(client->adapter, client->addr,
+ 				      client->flags, data_arg.read_write,
+-				      data_arg.command, data_arg.size, NULL);
++				      data_arg.command, data_arg.size, &temp);
+ 
+ 	if (data_arg.data == NULL) {
+ 		dev_dbg(&client->adapter->dev,
+@@ -401,6 +405,7 @@ static noinline int i2cdev_ioctl_smbus(struct i2c_client *client,
+ 	}
+ 	res = i2c_smbus_xfer(client->adapter, client->addr, client->flags,
+ 	      data_arg.read_write, data_arg.command, data_arg.size, &temp);
++#if 0
+ 	if (!res && ((data_arg.size == I2C_SMBUS_PROC_CALL) ||
+ 		     (data_arg.size == I2C_SMBUS_BLOCK_PROC_CALL) ||
+ 		     (data_arg.read_write == I2C_SMBUS_READ))) {
+@@ -408,6 +413,28 @@ static noinline int i2cdev_ioctl_smbus(struct i2c_client *client,
+ 			return -EFAULT;
+ 	}
+ 	return res;
++#endif
++	if ( res && (((data_arg.size == I2C_SMBUS_BYTE) ||
++	              (data_arg.size == I2C_SMBUS_BYTE_DATA) ||(data_arg.size == I2C_SMBUS_WORD_DATA))&&
++		      (data_arg.read_write == I2C_SMBUS_READ))) {
++		if (copy_to_user(data_arg.data, &temp, datasize))
++			return -EFAULT;
++	}
++
++	if (  res && (data_arg.size == I2C_SMBUS_BLOCK_DATA)&&(data_arg.read_write == I2C_SMBUS_READ))
++	{
++		if (copy_to_user(data_arg.data, &temp, res))
++			return -EFAULT;
++	}
++
++	if ( res && (((data_arg.size == I2C_SMBUS_PROC_CALL) ||
++		      (data_arg.size == I2C_SMBUS_BLOCK_PROC_CALL)) ||
++		      (data_arg.read_write == I2C_SMBUS_READ))) {
++		if (copy_to_user(data_arg.data, &temp, res * sizeof(data_arg.data->byte)))
++			return -EFAULT;
++	}
++
++	return 0;
+ }
+ 
+ static long i2cdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+@@ -471,12 +498,8 @@ static long i2cdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+ 		client->adapter->timeout = msecs_to_jiffies(arg * 10);
+ 		break;
+ 	default:
+-		/* NOTE:  returning a fault code here could cause trouble
+-		 * in buggy userspace code.  Some old kernel bugs returned
+-		 * zero in this case, and userspace code might accidentally
+-		 * have depended on that bug.
+-		 */
+-		return -ENOTTY;
++		/* Call the core ioctl (AMI extended)functions */
++		return i2c_ioctl(client->adapter,cmd,arg);
+ 	}
+ 	return 0;
+ }
+@@ -612,6 +635,14 @@ static struct notifier_block i2cdev_notifier = {
+ };
+ 
+ /* ------------------------------------------------------------------------- */
++#ifdef I2C_BUS_RECOVERY
++static void recover_i2c_bus (unsigned long ptr)
++{
++	i2c_recovery_event ();
++	mod_timer(&poll_timer,jiffies +(10000 * HZ)/1000);
++	return;
++}
++#endif
+ 
+ /*
+  * module load/unload record keeping
+@@ -642,6 +673,14 @@ static int __init i2c_dev_init(void)
+ 	/* Bind to already existing adapters right away */
+ 	i2c_for_each_dev(NULL, i2cdev_attach_adapter);
+ 
++#ifdef I2C_BUS_RECOVERY
++	init_timer(&poll_timer);
++	poll_timer.function = recover_i2c_bus;
++	poll_timer.data = 0;
++	poll_timer.expires = jiffies +(10000 * HZ)/1000;
++	add_timer(&poll_timer);
++#endif
++
+ 	return 0;
+ 
+ out_unreg_class:
+@@ -659,6 +698,9 @@ static void __exit i2c_dev_exit(void)
+ 	i2c_for_each_dev(NULL, i2cdev_detach_adapter);
+ 	class_destroy(i2c_dev_class);
+ 	unregister_chrdev(I2C_MAJOR, "i2c");
++#ifdef I2C_BUS_RECOVERY
++	del_timer(&poll_timer);
++#endif
+ }
+ 
+ MODULE_AUTHOR("Frodo Looijaard <frodol@dds.nl> and "
+-- 
+1.9.1
+

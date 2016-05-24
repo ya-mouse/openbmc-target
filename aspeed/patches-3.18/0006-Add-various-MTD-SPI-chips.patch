@@ -1,0 +1,3672 @@
+From c7025568f83800de384c457557169e44740dc8f7 Mon Sep 17 00:00:00 2001
+From: "Anton D. Kachalov" <mouse@yandex-team.ru>
+Date: Tue, 24 May 2016 19:36:35 +0300
+Subject: [PATCH 06/14] Add various MTD SPI chips
+
+Signed-off-by: Anton D. Kachalov <mouse@yandex-team.ru>
+---
+ drivers/mtd/spichips/Kconfig     |   94 ++++
+ drivers/mtd/spichips/Makefile    |   18 +
+ drivers/mtd/spichips/astspi.c    |  367 +++++++++++++
+ drivers/mtd/spichips/atmel.c     |  133 +++++
+ drivers/mtd/spichips/default.c   |  106 ++++
+ drivers/mtd/spichips/generic.c   | 1052 ++++++++++++++++++++++++++++++++++++++
+ drivers/mtd/spichips/intels33.c  |   96 ++++
+ drivers/mtd/spichips/m25pxx.c    |  121 +++++
+ drivers/mtd/spichips/macronix.c  |  208 ++++++++
+ drivers/mtd/spichips/micron.c    |  104 ++++
+ drivers/mtd/spichips/spansion.c  |  103 ++++
+ drivers/mtd/spichips/spiaccess.c |  433 ++++++++++++++++
+ drivers/mtd/spichips/spiflash.h  |  178 +++++++
+ drivers/mtd/spichips/spimtd.c    |  241 +++++++++
+ drivers/mtd/spichips/spireg.c    |  180 +++++++
+ drivers/mtd/spichips/winbond.c   |   98 ++++
+ 16 files changed, 3532 insertions(+)
+ create mode 100644 drivers/mtd/spichips/Kconfig
+ create mode 100644 drivers/mtd/spichips/Makefile
+ create mode 100644 drivers/mtd/spichips/astspi.c
+ create mode 100644 drivers/mtd/spichips/atmel.c
+ create mode 100644 drivers/mtd/spichips/default.c
+ create mode 100644 drivers/mtd/spichips/generic.c
+ create mode 100644 drivers/mtd/spichips/intels33.c
+ create mode 100644 drivers/mtd/spichips/m25pxx.c
+ create mode 100644 drivers/mtd/spichips/macronix.c
+ create mode 100644 drivers/mtd/spichips/micron.c
+ create mode 100644 drivers/mtd/spichips/spansion.c
+ create mode 100644 drivers/mtd/spichips/spiaccess.c
+ create mode 100644 drivers/mtd/spichips/spiflash.h
+ create mode 100644 drivers/mtd/spichips/spimtd.c
+ create mode 100644 drivers/mtd/spichips/spireg.c
+ create mode 100644 drivers/mtd/spichips/winbond.c
+
+diff --git a/drivers/mtd/spichips/Kconfig b/drivers/mtd/spichips/Kconfig
+new file mode 100644
+index 0000000..c5e5a4c
+--- /dev/null
++++ b/drivers/mtd/spichips/Kconfig
+@@ -0,0 +1,94 @@
++# drivers/mtd/chips/Kconfig
++# $Id: Kconfig,v 1.18 2005/11/07 11:14:22 gleixner Exp $
++
++menu "SPI Flash chip drivers"
++	depends on MTD!=n
++
++config MTD_SPI
++	bool "Enable MTD support on SPI devices"
++	depends on MTD
++	help
++	  Select this if you want to access SPI flash devices via MTD
++
++config MTD_SPI_SPANSION
++	bool "Spansion SPI devices Support"
++	depends on MTD_SPI
++	help
++	  Select this if you want to use Spansion SPI devices
++
++config MTD_SPI_MACRONIX
++	bool "Macronix SPI devices Support"
++	depends on MTD_SPI
++	help
++	  Select this if you want to use Macronix SPI devices
++
++config MTD_SPI_INTEL_S33
++	bool "Intel S33 SPI devices Support"
++	depends on MTD_SPI
++	help
++	  Select this if you want to use Intel S33 SPI devices
++
++config MTD_SPI_WINBOND
++	bool "Winbond SPI devices Support"
++	depends on MTD_SPI
++	help
++	  Select this if you want to use Winbond SPI devices
++
++config MTD_SPI_AT
++	bool "Atmel SPI devices Support"
++	depends on MTD_SPI
++	help
++	  Select this if you want to use Atmel SPI devices
++
++config MTD_SPI_ST
++	bool "ST Micro SPI devices Support"
++	depends on MTD_SPI
++	help
++	  Select this if you want to use ST Microelectronics SPI devices
++
++config MTD_SPI_NUMONYX
++	bool "Numonyx SPI devices Support"
++	depends on MTD_SPI
++	help
++	  Select this if you want to use Numonyx SPI devices
++
++config MTD_SPI_MICRON
++	bool "Numonyx SPI devices Support"
++	depends on MTD_SPI
++	help
++	  Select this if you want to use Micron SPI devices
++
++config MTD_SPI_DEFAULT
++	bool "Support for SPI Devices not supporting ReadID"
++	depends on MTD_SPI
++	help
++	   Select this if the SPI device on your board does not SPI ReadID Command
++
++config DEFAULT_SPI_NAME  
++	string "Default SPI Name"
++	depends on MTD_SPI && MTD_SPI_DEFAULT
++	default "default"
++	help
++	   Name of the SPI Device that does not support ReadID 
++
++config DEFAULT_SPI_SIZE
++	int "Default SPI Size in Bytes"
++	depends on MTD_SPI && MTD_SPI_DEFAULT
++	default "65536"
++	help
++	   Chip Size of the SPI Device that does not support ReadID 
++
++config DEFAULT_SPI_ERASE_SIZE
++	int "Default SPI Erase Block Size in Bytes"
++	depends on MTD_SPI && MTD_SPI_DEFAULT
++	default "65536"
++	help
++	   Erase Block Size of the SPI Device that does not support ReadID 
++
++config MTD_AST_SPI
++	bool "AST SOC SPI Flash Controller"
++	depends on MTD_SPI
++	help
++		If you are using SPI device on AST SOC, select Y
++
++endmenu
+diff --git a/drivers/mtd/spichips/Makefile b/drivers/mtd/spichips/Makefile
+new file mode 100644
+index 0000000..b30a452
+--- /dev/null
++++ b/drivers/mtd/spichips/Makefile
+@@ -0,0 +1,18 @@
++#
++# linux/drivers/spichips/Makefile
++#
++obj-$(CONFIG_MTD_SPI)		+= spimtd.o spiaccess.o spireg.o generic.o
++
++obj-$(CONFIG_MTD_SPI_ST)   	+= m25pxx.o
++obj-$(CONFIG_MTD_SPI_SPANSION) += spansion.o
++obj-$(CONFIG_MTD_SPI_MACRONIX) += macronix.o
++obj-$(CONFIG_MTD_SPI_AT)   	+= atmel.o
++obj-$(CONFIG_MTD_SPI_INTEL_S33) += intels33.o
++obj-$(CONFIG_MTD_SPI_WINBOND) += winbond.o
++obj-$(CONFIG_MTD_SPI_MICRON) += micron.o
++obj-$(CONFIG_MTD_SPI_NUMONYX) += micron.o
++
++# The default driver  should be the last in the list of suppported devices
++obj-$(CONFIG_MTD_SPI_DEFAULT)   += default.o
++
++obj-$(CONFIG_MTD_AST_SPI)   += astspi.o
+diff --git a/drivers/mtd/spichips/astspi.c b/drivers/mtd/spichips/astspi.c
+new file mode 100644
+index 0000000..a0dc9d4
+--- /dev/null
++++ b/drivers/mtd/spichips/astspi.c
+@@ -0,0 +1,367 @@
++/*
++ * (C) Copyright 2009
++ * American Megatrends Inc.
++ *
++ * SPI flash controller driver for the AST SoC
++ *
++ * See file CREDITS for list of people who contributed to this
++ * project.
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
++ * MA 02111-1307 USA
++ */
++
++#include "spiflash.h"
++
++#define AST_FMC_REG_BASE		AST_FMC_VA_BASE /* 0x1E620000 */
++#define AST_FMC_FLASH_CTRL_REG		0x00
++
++#define AST_FMC_CE0_CTRL_REG		0x10
++#define AST_FMC_CTRL_REG_SIZE           0x04 
++
++#define AST_SPI_CMD_MASK		0x00FF0000 /* bit[23:16] */
++#define AST_SPI_CMD_SHIFT		16
++
++#define AST_SPI_CLOCK_MASK		0x00000F00 /* bit[11:8] */
++#define AST_SPI_CLOCK_SHIFT		8
++
++#define AST_SPI_DUMMY_MASK		0x000000C0 /* bit[7:6] */
++#define AST_SPI_DUMMY_0			0x00000000
++#define AST_SPI_DUMMY_1			0x00000040
++#define AST_SPI_DUMMY_2			0x00000080
++#define AST_SPI_DUMMY_3			0x000000C0
++
++#define AST_SPI_DATA_SINGLE		0x00000000
++#define AST_SPI_DATA_DUAL		0x00000008
++#define AST_SPI_DUAL_IO		0x00000002
++#define AST_SPI_FULL_DUAL_IO		0x00000003
++#define AST_SPI_DATA_MASK		7
++#define AST_SPI_DUAL_IO_SHIFT		28
++
++#define AST_SPI_CE_LOW			0x00000000
++#define AST_SPI_CE_HI			0x00000004
++
++#define AST_SPI_CMD_MODE_MASK		0x00000007 /* bit[2:0] */
++#define AST_SPI_CMD_MODE_NORMAL		0x00000000
++#define AST_SPI_CMD_MODE_FAST		0x00000001
++#define AST_SPI_CMD_MODE_WRITE		0x00000002
++#define AST_SPI_CMD_MODE_USER		0x00000003
++
++#define SPI_FAST_READ_CMD		0x0B
++#define SPI_DREAD_CMD		0x3B
++#define SPI_2READ_CMD		0xBB
++
++extern unsigned long ractrends_spiflash_flash_size[MAX_SPI_BANKS];
++static int *g_fast_read = 0;
++
++static void reset_flash(int bank)
++{
++	uint32_t reg;
++	uint32_t ctrl_reg;
++
++        // bank = 0,CE0 (0x10) ; bank = 1,CE1 (0x14) ; bank = 2,CE2 (0x18)
++        ctrl_reg = AST_FMC_CE0_CTRL_REG + (bank * AST_FMC_CTRL_REG_SIZE);
++	
++	reg = ioread32((void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++	if (*g_fast_read == 3)//2xI/O Read
++	{
++		reg &= ~(AST_SPI_CMD_MASK | AST_SPI_DUMMY_MASK | AST_SPI_CMD_MODE_MASK);
++		reg |= (SPI_2READ_CMD << AST_SPI_CMD_SHIFT) | AST_SPI_DUMMY_1 | AST_SPI_CE_LOW | AST_SPI_CMD_MODE_FAST | (AST_SPI_FULL_DUAL_IO << AST_SPI_DUAL_IO_SHIFT);
++	}
++	else if (*g_fast_read == 2)//Dual Read
++	{
++		reg &= ~(AST_SPI_CMD_MASK | AST_SPI_DUMMY_MASK | AST_SPI_CMD_MODE_MASK);
++		reg |= (SPI_DREAD_CMD << AST_SPI_CMD_SHIFT) | AST_SPI_DUMMY_1 | AST_SPI_CE_LOW | AST_SPI_CMD_MODE_FAST | (AST_SPI_DUAL_IO << AST_SPI_DUAL_IO_SHIFT);			
++	}
++	else if (*g_fast_read == 1)//Fast Read
++	{
++		reg &= ~(AST_SPI_CMD_MASK | AST_SPI_DUMMY_MASK | AST_SPI_CMD_MODE_MASK);
++		reg |= (SPI_FAST_READ_CMD << AST_SPI_CMD_SHIFT) | AST_SPI_DUMMY_1 | AST_SPI_CE_LOW | AST_SPI_CMD_MODE_FAST;
++	}
++	else
++	{
++		reg &= (~AST_SPI_CMD_MODE_MASK);
++		reg |= (AST_SPI_CE_LOW | AST_SPI_CMD_MODE_NORMAL);
++	}
++	iowrite32(reg, (void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++	
++}
++
++static void reset_iomode (int bank)
++{
++	uint32_t reg;
++	uint32_t ctrl_reg;
++
++	// bank = 0,CE0 (0x10) ; bank = 1,CE1 (0x14) ; bank = 2,CE2 (0x18)
++	ctrl_reg = AST_FMC_CE0_CTRL_REG + (bank * AST_FMC_CTRL_REG_SIZE);
++
++	reg = ioread32((void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++	reg &= ~(AST_SPI_CMD_MASK | AST_SPI_DUMMY_MASK | (AST_SPI_DATA_MASK << AST_SPI_DUAL_IO_SHIFT));
++
++	if (*g_fast_read == 2)//Dual Read
++		reg |= (AST_SPI_DUAL_IO << AST_SPI_DUAL_IO_SHIFT);		
++	else if (*g_fast_read == 3)//2xI/O Read
++		reg |= (AST_SPI_FULL_DUAL_IO << AST_SPI_DUAL_IO_SHIFT);
++		
++	iowrite32(reg, (void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++
++	return;
++}
++
++static void chip_select_active(int bank)
++{
++	uint32_t reg;
++	uint32_t ctrl_reg;
++
++        // bank = 0,CE0 (0x10) ; bank = 1,CE1 (0x14) ; bank = 2,CE2 (0x18)
++        ctrl_reg = AST_FMC_CE0_CTRL_REG + (bank * AST_FMC_CTRL_REG_SIZE);
++
++	reg = ioread32((void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++	reg &= (~(AST_SPI_CMD_MODE_MASK | (AST_SPI_DATA_MASK << AST_SPI_DUAL_IO_SHIFT)) );
++	reg |= (AST_SPI_CE_LOW | AST_SPI_CMD_MODE_USER);
++	iowrite32(reg, (void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++}
++
++static void chip_select_deactive(int bank)
++{
++	uint32_t reg;
++	uint32_t ctrl_reg;
++
++        // bank = 0,CE0 (0x10) ; bank = 1,CE1 (0x14) ; bank = 2,CE2 (0x18)
++        ctrl_reg = AST_FMC_CE0_CTRL_REG + (bank * AST_FMC_CTRL_REG_SIZE);
++
++	reg = ioread32((void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++	reg &= (~(AST_SPI_CMD_MODE_MASK | (AST_SPI_DATA_MASK << AST_SPI_DUAL_IO_SHIFT)) );
++	reg |= (AST_SPI_CE_HI | AST_SPI_CMD_MODE_USER);
++	iowrite32(reg, (void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++}
++
++static int astspiflash_transfer(int bank, unsigned char *cmd, int cmdlen, SPI_DIR dir, unsigned char *data, unsigned long datalen)
++{
++	ulong base;
++	int i;
++	ulong offset = 0;
++	
++	for(i = 0; i < bank; i++) 
++	{
++		offset += ractrends_spiflash_flash_size[i];
++	}
++
++	base = AST_SPI_FLASH_VA_BASE + offset;
++
++	chip_select_active(bank);
++
++	if (cmd[0] == 0xBB)
++	{
++		*((volatile unsigned char *) base) = cmd[0];
++		reset_iomode(bank);
++		for (i = 1; i < cmdlen; i ++)
++			*((volatile unsigned char *) base) = cmd[i];
++	}
++	else if (cmd[0] == 0x3B)
++	{
++		for (i = 0; i < cmdlen; i ++)
++			*((volatile unsigned char *) base) = cmd[i];
++		reset_iomode(bank);			
++	}
++	else
++	{
++	/* issue command */
++	for (i = 0; i < cmdlen; i ++)
++		*((volatile unsigned char *) base) = cmd[i];
++	}
++
++	if (dir == SPI_WRITE) {
++		/* write data to flash */
++		for (i = 0; i < datalen; i ++) {
++			*((volatile unsigned char *) base) = data[i];
++		}
++	} else if (dir == SPI_READ) {
++		/* read data from flash */
++		for (i = 0; i < datalen; i ++) {
++			data[i] = ((volatile unsigned char *) base)[i];
++		}
++	}
++
++	chip_select_deactive(bank);
++
++
++	reset_flash(bank);
++	return 0;
++}
++
++static const unsigned char clock_selection_table[] = {
++	0x0F, /* 1 */
++	0x07, /* 2 */
++	0x0E, /* 3 */
++	0x06, /* 4 */
++	0x0D, /* 5 */
++	0x05, /* 6 */
++	0x0C, /* 7 */
++	0x04, /* 8 */
++	0x0B, /* 9 */
++	0x03, /* 10 */
++	0x0A, /* 11 */
++	0x02, /* 12 */
++	0x09, /* 13 */
++	0x01, /* 14 */
++	0x08, /* 15 */
++	0x00, /* 16 */
++};
++
++static int astspiflash_configure_clock(int bank, unsigned int clock)
++{
++	uint32_t reg;
++	uint32_t cpu_clock;
++	uint32_t clock_divisor;
++	uint32_t ctrl_reg;
++#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++	uint32_t cpu_ratio;
++	uint32_t axi_ratio;
++#endif		
++        // bank = 0,CE0 (0x10) ; bank = 1,CE1 (0x14) ; bank = 2,CE2 (0x18)
++        ctrl_reg = AST_FMC_CE0_CTRL_REG + (bank * AST_FMC_CTRL_REG_SIZE);
++
++	/* according to AST spec, clock of SPI controller can not exceed 50M Hz */
++	if (clock > (50 * 1000000))
++		clock = 50 * 1000000;
++
++	/* read CPU clock rate and CPU/AHB ratio from SCU */
++	reg = ioread32((void __iomem *)SCU_HW_STRAPPING_REG);
++	
++	#if defined(CONFIG_SOC_AST2500) || defined(CONFIG_SOC_AST2530)
++	cpu_ratio = 2;
++
++	switch ((reg & 0x00000E00) >> 9) {
++	case 0x01:
++		axi_ratio = 2;
++		break;
++	case 0x02:
++		axi_ratio = 3;
++		break;
++	case 0x03:
++		axi_ratio = 4;
++		break;		
++	case 0x04:
++		axi_ratio = 5;
++		break;		
++	case 0x05:
++		axi_ratio = 6;
++		break;		
++	case 0x06:
++		axi_ratio = 7;
++		break;		
++	case 0x07:
++		axi_ratio = 8;
++		break;		
++	default:
++		axi_ratio = 2;
++		break;
++	}
++
++	cpu_clock = 792 * 1000000;//Default H-PLL value
++	cpu_clock = cpu_clock / cpu_ratio / axi_ratio;	
++	#else
++	switch ((reg & 0x00000300) >> 8) {
++	case 0x00:
++		cpu_clock = 384 * 1000000;
++		break;
++	case 0x01:
++		cpu_clock = 360 * 1000000;
++		break;
++	case 0x02:
++		cpu_clock = 336 * 1000000;
++		break;
++	case 0x03:
++		cpu_clock = 408 * 1000000;
++		break;
++	default:
++		cpu_clock = 408 * 1000000;
++	}
++
++	switch ((reg & 0x00000C00) >> 10) {
++	case 0x01:
++		cpu_clock /= 2;
++		break;
++	case 0x02:
++		cpu_clock /= 4;
++		break;
++	case 0x03:
++		cpu_clock /= 3;
++		break;
++	}
++	#endif
++
++	clock_divisor = 1;
++	while ((cpu_clock / clock_divisor) > clock) {
++		clock_divisor ++;
++		if (clock_divisor == 16)
++			break;
++	}
++
++	reg = ioread32((void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++	reg &= ~AST_SPI_CLOCK_MASK;
++	reg |= (clock_selection_table[clock_divisor - 1] << AST_SPI_CLOCK_SHIFT);
++	iowrite32(reg, (void __iomem *)AST_FMC_REG_BASE + ctrl_reg);
++
++	return 0;
++}
++
++struct spi_ctrl_driver astspi_driver = {
++	.name = "astspiflash",
++	.module = THIS_MODULE,
++	.max_read = (64 * 1024 * 1024), /* 32 MB */
++	#ifdef CONFIG_FLASH_OPERATION_MODE_MASK
++	.operation_mode_mask = CONFIG_FLASH_OPERATION_MODE_MASK,
++	#else
++	.operation_mode_mask = 0x00010003, //Default
++	#endif
++	.fast_read = 1,
++	.fast_write = 0,	
++	.spi_transfer = astspiflash_transfer,
++	.spi_burst_read = astspiflash_transfer,
++	.spi_configure_clock = astspiflash_configure_clock,
++};
++
++static int astspi_init(void)
++{
++	sema_init(&astspi_driver.lock, 1);
++	register_spi_ctrl_driver(&astspi_driver);
++
++	g_fast_read = &astspi_driver.fast_read;
++
++	reset_flash(0);	// CE0
++
++	reset_flash(1);	// CE1
++
++	reset_flash(2);	// CE2
++	#if !defined(CONFIG_SOC_AST2500) && !defined(CONFIG_SOC_AST2530)
++	reset_flash(3);	// CE3
++	#endif
++
++	return 0;
++}
++
++static void astspi_exit(void)
++{
++	unregister_spi_ctrl_driver(&astspi_driver);
++}
++
++module_init(astspi_init);
++module_exit(astspi_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("AST SOC SPI flash controller driver");
+diff --git a/drivers/mtd/spichips/atmel.c b/drivers/mtd/spichips/atmel.c
+new file mode 100644
+index 0000000..a7cfddb
+--- /dev/null
++++ b/drivers/mtd/spichips/atmel.c
+@@ -0,0 +1,133 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++/* Name, ID1, ID2 , Size, Clock, Erase regions, address mode,{ Offset, Erase Size, Erase Block Count } */
++/* address mode:  0x00 -3 byte address
++			 	0x01 - 4 byte address	
++			 	0x02 - Low byte: 3 byte address, High byte: 4 byte address*/
++static struct spi_flash_info atmel_data [] = 
++{
++	/* Atmel 26F 64K Sectors */
++	{ "Atmel at26f004"   , 0x1F, 0x0004, 0x00010001, 0x100000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 8   },} },
++
++	/* Atmel 25DF 64K Sectors */
++	{ "Atmel at25df041a" , 0x1F, 0x0144, 0x00010001, 0x100000 , 70 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 8   },} },
++
++	/* Atmel 26DF 64K Sectors */
++	{ "Atmel at26df081a" , 0x1F, 0x0145, 0x00010001, 0x100000 , 70 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 16  },} },
++	{ "Atmel at26df161a" , 0x1F, 0x0146, 0x00010001, 0x200000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 32  },} },
++	{ "Atmel at26df161"  , 0x1F, 0x0046, 0x00010001, 0x200000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 32  },} },
++	{ "Atmel at26df321"  , 0x1F, 0x0047, 0x00010001, 0x400000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 64  },} },
++	{ "Atmel at25df321"  , 0x1F, 0x0147, 0x00010001, 0x400000 , 85 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 64  },} },
++};
++
++
++static
++int 
++atmel_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info)
++{
++	int retval;
++	unsigned char status;
++
++	retval =  spi_generic_probe(bank, ctrl_drv,chip_info,"atmel",atmel_data,ARRAY_SIZE(atmel_data));
++	if (retval == -1)
++		return retval;
++
++	if (spi_generic_read_status(bank,ctrl_drv,&status) < 0)
++	{
++		printk("atmel: Read SR Failed.Cannot Unprotect all sectors\n");
++		return retval;
++	}
++
++	/* If SRPL = 1 (Bit 7)and WP/ = 0 (Bit 4), then it is hardware locked */
++	if ((status & 0x80) && (!(status & 0x10)))
++	{
++		printk("atmel: Hardware Locked\n");
++		return retval;
++	}
++
++	/* Check if already unprotected */
++	if ((status & 0xC) == 0)
++		return retval;
++
++	/* if SRPL is set, we have to disable SRPL before unprotect */
++	if (status & 0x80)
++	{
++		if (spi_generic_write_status(bank,ctrl_drv,status& 0x7F) < 0)
++		{
++			printk("atmel: Clearing SRPL failed .Cannot Unprotect all sectors\n");
++			return retval;
++		}
++	}
++	
++	/* Unprotect all sectors */
++	if (spi_generic_write_status(bank,ctrl_drv,0x0) < 0)
++		printk("atmel: Unable to Unprotect all sectors\n");
++
++
++	return retval;
++}
++
++struct spi_chip_driver atmel_driver =
++{
++	.name 		= "atmel",
++	.module 	= THIS_MODULE,
++	.probe	 	= atmel_probe,
++	.erase_sector 	= spi_generic_erase,
++	.read_bytes	= spi_generic_read,
++	.write_bytes	= spi_generic_write,
++	/* Atmel supports individual protect and unprotect of sectors */
++	/* if needed implement the functions and add here */
++};
++
++int 
++atmel_init(void)
++{
++	sema_init(&atmel_driver.lock, 1);
++#ifdef __UBOOT__	/* MIPS */
++	atmel_driver.probe	 		= atmel_probe;
++	atmel_driver.erase_sector 	= spi_generic_erase;
++	atmel_driver.read_bytes		= spi_generic_read;
++	atmel_driver.write_bytes	= spi_generic_write;
++#endif
++	register_spi_chip_driver(&atmel_driver);
++	return 0;
++}
++
++void 
++atmel_exit(void)
++{
++	sema_init(&atmel_driver.lock, 1);
++	unregister_spi_chip_driver(&atmel_driver);
++	return;
++}
++
++module_init(atmel_init);
++module_exit(atmel_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for Atmel flash chips");
++
++#endif
+diff --git a/drivers/mtd/spichips/default.c b/drivers/mtd/spichips/default.c
+new file mode 100644
+index 0000000..93f31d7
+--- /dev/null
++++ b/drivers/mtd/spichips/default.c
+@@ -0,0 +1,106 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++#ifndef CONFIG_DEFAULT_SPI_NAME  
++#define CONFIG_DEFAULT_SPI_NAME "Unknown SPI Device"
++#endif
++
++#ifndef CONFIG_DEFAULT_SPI_SIZE
++#define CONFIG_DEFAULT_SPI_SIZE 0
++#endif
++
++#ifndef CONFIG_DEFAULT_SPI_CLOCK
++#define CONFIG_DEFAULT_SPI_CLOCK (25 * 1000000)
++#endif
++
++#ifndef CONFIG_DEFAULT_SPI_ERASE_SIZE
++#define CONFIG_DEFAULT_SPI_ERASE_SIZE	(64 *1024)
++#endif
++
++
++/* This driver is called at end when all probe failed. Some chips don't support read id
++   commands and user can provide the information here */
++
++/* Name, ID1, ID2 , Size, Clock, Erase regions, address mode,{ Offset, Erase Size, Erase Block Count } */
++/* address mode:  0x00 -3 byte address
++			 	0x01 - 4 byte address	
++			 	0x02 - Low byte: 3 byte address, High byte: 4 byte address*/
++static struct spi_flash_info default_data [] = 
++{
++	{ CONFIG_DEFAULT_SPI_NAME , 0xFF, 0x0FFFF, 0x00010001, CONFIG_DEFAULT_SPI_SIZE , CONFIG_DEFAULT_SPI_CLOCK, 1, 0x00,
++			{{ 0, CONFIG_DEFAULT_SPI_ERASE_SIZE, CONFIG_DEFAULT_SPI_SIZE/CONFIG_DEFAULT_SPI_ERASE_SIZE },} },
++};
++
++static
++int 
++default_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info)
++{
++	memcpy(chip_info,&default_data[0],sizeof(struct spi_flash_info));
++
++	if (spi_generic_write_status(bank,ctrl_drv,0x0) < 0)
++		printk("%s: Unable to Unprotect all sectors\n",CONFIG_DEFAULT_SPI_NAME);
++	return 0;
++}
++
++struct spi_chip_driver default_driver =
++{
++	.name 		= "default",
++	.module 	= THIS_MODULE,
++	.probe	 	= default_probe,
++	.erase_sector 	= spi_generic_erase,
++	.read_bytes	= spi_generic_read,
++	.write_bytes	= spi_generic_write,
++};
++
++int 
++default_init(void)
++{
++	sema_init(&default_driver.lock, 1);
++#ifdef __UBOOT__	/* MIPS */
++	default_driver.probe	 		= default_probe;
++	default_driver.erase_sector 	= spi_generic_erase;
++	default_driver.read_bytes		= spi_generic_read;
++	default_driver.write_bytes	= spi_generic_write;
++#endif
++	register_spi_chip_driver(&default_driver);
++	return 0;
++}
++
++void 
++default_exit(void)
++{
++	sema_init(&default_driver.lock, 1);
++	unregister_spi_chip_driver(&default_driver);
++	return;
++}
++
++module_init(default_init);
++module_exit(default_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for Default flash chips");
++
++#endif
+diff --git a/drivers/mtd/spichips/generic.c b/drivers/mtd/spichips/generic.c
+new file mode 100644
+index 0000000..50a70f6
+--- /dev/null
++++ b/drivers/mtd/spichips/generic.c
+@@ -0,0 +1,1052 @@
++/*
++ * Copyright (C) 2007-2013 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++
++#ifdef __UBOOT__
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++/* Flash opcodes. */
++#define	OPCODE_WREN		0x06	/* Write enable */
++#define	OPCODE_WRDI		0x04	/* Write disable*/
++#define	OPCODE_RDID		0x9F	/* Read JEDEC ID */
++#define	OPCODE_RDSR		0x05	/* Read status register */
++#define OPCODE_WRSR		0x01	/* Write status register */
++#define	OPCODE_READ		0x03	/* Read data bytes */
++#define	OPCODE_FAST_READ	0x0B	/* Read Fast read */
++#define	OPCODE_DREAD	0x3B	/* Dual Read Mode */
++#define	OPCODE_2READ	0xBB	/* 2 x I/O Read Mode */
++#define	OPCODE_PP		0x02	/* Page program */
++#define	OPCODE_SE		0xD8	/* Sector erase */
++#define OPCODE_DP		0xB9	/* Deep Power Down */
++#define	OPCODE_RES		0xAB	/* Read Electronic Signature */
++
++/* Status Register bits. */
++#define	SR_WIP			0x01	/* Write in progress */
++#define	SR_WEL			0x02	/* Write enable latch */
++#define	SR_BP0			0x04	/* Block protect 0 */
++#define	SR_BP1			0x08	/* Block protect 1 */
++#define	SR_BP2			0x10	/* Block protect 2 */
++#define	SR_SRWD			0x80	/* SR write protect */
++
++#define PROGRAM_PAGE_SIZE	256	/* Max Program Size */
++
++#define ADDR_16MB 		0x1000000
++#define CMD_MX25XX_EN4B		0xb7	/* Enter 4-byte address mode */
++#define CMD_MX25XX_EX4B		0xe9	/* Exit 4-byte address mode */
++
++
++#define ADDRESS_3BYTE	0x00
++#define ADDRESS_4BYTE	0x01
++#define ADDRESS_LO3_HI4_BYTE 0x02
++
++#define ADDRESS_DIE_LO3_HI4_BYTE 0x06
++#define ADDR_32MB 		0x2000000
++#define CMD_WX25XX_CS		0xc2	/* Die select */
++
++extern unsigned long ractrends_spiflash_flash_id[MAX_SPI_BANKS];
++
++static int wait_till_ready(int bank,struct spi_ctrl_driver *ctrl_drv);
++
++static
++int inline
++spi_error(int retval)
++{
++	printk("SPI Chip %s (%d) : Error (%d)\n",__FILE__,__LINE__,retval);
++	return retval;
++}
++
++static int
++spi_generic_read_flag_status(int bank, struct spi_ctrl_driver *ctrl_drv,unsigned char *status)
++{
++	int  retval;
++	u8 code = 0x70;
++
++	/* Issue Controller Transfer Routine */
++	retval = ctrl_drv->spi_transfer(bank,&code, 1,SPI_READ,status, 1);
++
++	if (retval < 0)
++		return spi_error(retval);
++
++	return 0;
++}
++
++
++
++int
++spi_generic_read_status(int bank, struct spi_ctrl_driver *ctrl_drv,unsigned char *status)
++{
++	int  retval;
++	u8 code = OPCODE_RDSR;
++
++	/* Issue Controller Transfer Routine */
++	retval = ctrl_drv->spi_transfer(bank,&code, 1,SPI_READ,status, 1);
++
++	if (retval < 0)
++		return spi_error(retval);
++
++	return 0;
++}
++
++int
++spi_generic_write_status(int bank,struct spi_ctrl_driver *ctrl_drv, unsigned char status)
++{
++	int retval;
++	u8 code = OPCODE_WRSR;
++
++	/* Send write enable */
++	spi_generic_write_enable(bank,ctrl_drv);
++
++	/* Issue Controller Transfer Routine */
++	retval = ctrl_drv->spi_transfer(bank,&code, 1,SPI_WRITE,&status, 1);
++	if (retval < 0) 
++		return spi_error(retval);
++
++	return 0;
++}
++
++
++int
++spi_generic_write_enable(int bank,struct spi_ctrl_driver *ctrl_drv)
++{
++	u8 code = OPCODE_WREN;
++	int retval;
++
++	/* Issue Controller Transfer Routine */
++	retval = ctrl_drv->spi_transfer(bank,&code, 1,SPI_NONE, NULL, 0);
++	if (retval < 0)
++		return spi_error(retval);
++	return 0;
++}
++
++int
++spi_generic_write_disable(int bank, struct spi_ctrl_driver *ctrl_drv)
++{
++	u8 code = OPCODE_WRDI;
++	int retval;
++
++	/* Issue Controller Transfer Routine */
++	retval = ctrl_drv->spi_transfer(bank,&code, 1,SPI_NONE, NULL, 0);
++	if (retval < 0)
++		return spi_error(retval);
++	return 0;
++}
++
++int spi_generic_select_die(int bank, u8 die_num, struct spi_ctrl_driver *ctrl_drv)
++{
++	int retval;
++	u8 command[2];
++
++	command[0] = CMD_WX25XX_CS;
++	command[1] = die_num;
++
++	/* Wait until finished previous command. */
++	if (wait_till_ready(bank,ctrl_drv))
++	{
++		return -1;
++	}
++
++	retval = ctrl_drv->spi_transfer(bank, command, 2, SPI_NONE, NULL, 0);
++
++	if (retval < 0)
++	{
++		printk ("Could not select die.\n");
++		return spi_error(retval);
++	}
++	return 0;
++}
++
++int enter_4byte_addr_mode(int bank, struct spi_ctrl_driver *ctrl_drv)
++{
++	//enable 32 MB Address mode
++	u8 code = CMD_MX25XX_EN4B;
++	int retval;
++
++	//printf("<ENTER> 4 BYTE\n");
++	/* Wait until finished previous command. */
++	if (wait_till_ready(bank,ctrl_drv))
++	{
++		return -1;
++	}
++
++
++	/* Issue Controller Transfer Routine */
++	if ((ractrends_spiflash_flash_id[bank] == 0x002019BA) || (ractrends_spiflash_flash_id[bank] == 0x002020BA) || (ractrends_spiflash_flash_id[bank] == 0x002021BA))
++		spi_generic_write_enable(bank,ctrl_drv);
++	retval = ctrl_drv->spi_transfer(bank, &code, 1, SPI_NONE, NULL, 0);
++	if ((ractrends_spiflash_flash_id[bank] == 0x002019BA) || (ractrends_spiflash_flash_id[bank] == 0x002021BA)) 
++		spi_generic_write_disable(bank,ctrl_drv);
++	if (retval < 0)
++	{
++		printk ("Could not Enter into 4-byte address mode\n");
++		return spi_error(retval);
++	}
++	return 0;
++}
++
++int exit_4byte_addr_mode(int bank, struct spi_ctrl_driver *ctrl_drv)
++{
++	//Disable 32 MB Address mode
++	u8 code = CMD_MX25XX_EX4B;
++	int retval;
++
++	//printf("<EXIT> 4 BYTE\n");
++	/* Wait until finished previous command. */
++	if (wait_till_ready(bank,ctrl_drv))
++	{
++		return -1;
++	}
++
++
++	/* Issue Controller Transfer Routine */
++	if ((ractrends_spiflash_flash_id[bank] == 0x002019BA) || (ractrends_spiflash_flash_id[bank] == 0x002020BA) || (ractrends_spiflash_flash_id[bank] == 0x002021BA)) 
++		spi_generic_write_enable(bank,ctrl_drv);
++	retval = ctrl_drv->spi_transfer(bank, &code, 1, SPI_NONE, NULL, 0);
++	if ((ractrends_spiflash_flash_id[bank] == 0x002019BA) || (ractrends_spiflash_flash_id[bank] == 0x002020BA) || (ractrends_spiflash_flash_id[bank] == 0x002021BA)) 
++		spi_generic_write_disable(bank,ctrl_drv);
++	if (retval < 0)
++	{
++		printk ("Could not Exit from 4-byte address mode\n");
++		return spi_error(retval);
++	}
++	return 0;
++}
++
++int spi_generic_extended_address(int bank, SPI_DIR dir, u8 addr, struct spi_ctrl_driver *ctrl_drv)
++{
++	int retval;
++
++	if (dir == SPI_READ)
++	{
++		u8 code = 0xC8;
++		u8 reg_data;
++
++		ctrl_drv->spi_transfer(bank, &code, 1, SPI_READ, &reg_data, 1);
++		retval = (int) reg_data;
++	}
++	else if (dir == SPI_WRITE)
++	{
++		u8 command[2];
++
++		command[0] = 0xC5;
++		command[1] = addr;
++		spi_generic_write_enable(bank, ctrl_drv);
++		ctrl_drv->spi_transfer(bank, command, 2, SPI_NONE, NULL, 0);
++		spi_generic_write_disable(bank, ctrl_drv);
++		retval = command[1];
++	}
++	else // SPI_NONE
++	{
++		retval = 0;
++	}
++
++	return retval;
++}
++
++// the function just for WINBOND W25Q256 only, always revise the extended address to the defalut
++int w25q256_force_extended_address(int bank, struct spi_ctrl_driver *ctrl_drv)
++{
++	int retval;
++	u8 code;
++	u8 reg_data;
++	u8 command[5];
++
++	code = 0xC8; // "Read Extended Address Register"
++	retval = ctrl_drv->spi_transfer(bank, &code, 1, SPI_READ, &reg_data, 1);
++	if (reg_data == 0x01)
++	{
++		spi_generic_write_enable(bank,ctrl_drv);
++		command[0] = 0xC5; // "Write Extended Address Register" with the force address 0x00
++		command[1] = command[2] = command[3] = command[4] = 0x00;
++		retval = ctrl_drv->spi_transfer(bank, command, 5, SPI_NONE, NULL, 0);
++		spi_generic_write_disable(bank,ctrl_drv);
++	}
++	return 0;
++}
++
++/* Define max times to check status register before we give up. */
++#define	MAX_READY_WAIT_COUNT	4000000
++
++static int
++wait_till_ready(int bank,struct spi_ctrl_driver *ctrl_drv)
++{
++	unsigned long  count;
++	unsigned char sr;
++
++	for (count = 0; count < MAX_READY_WAIT_COUNT; count++)
++	{
++		if (spi_generic_read_status(bank,ctrl_drv,&sr) < 0)
++		{
++			printk("Error reading SPI Status Register\n");
++			break;
++		}
++		else
++		{
++			if (!(sr & SR_WIP))
++				return 0;
++		}
++	}
++
++	printk("spi_generic: Waiting for Ready Failed\n");
++	return 1;
++}
++
++static int
++require_read_flag_status(int bank,struct spi_ctrl_driver *ctrl_drv)
++{
++	unsigned long count;
++	unsigned char sr;
++
++	for (count = 0; count < MAX_READY_WAIT_COUNT; count++)
++	{
++		if (spi_generic_read_flag_status(bank,ctrl_drv,&sr) < 0)
++		{
++			printk("Error reading SPI Status Register\n");
++			break;
++		}
++		else
++		{
++			if (sr & SR_SRWD)
++				return 0;
++		}
++	}
++
++	printk("spi_generic %s() : Waiting for Ready Failed\n", __func__);
++	return 1;
++}
++
++
++
++int
++spi_generic_erase(struct map_info *map, unsigned long sect_addr)
++{
++	struct spi_flash_private *priv=map->fldrv_priv;
++	int bank = map->map_priv_1;
++	struct spi_ctrl_driver *ctrl_drv = priv->ctrl_drv;	
++	int retval;
++	unsigned char command[5];
++	int cmd_size;	
++	u8 address32 = priv->address32;
++	//unsigned long flash_size = priv->size;
++	u8 had_switch_die = 0;
++    u8 pwr_up_mode = 0;
++	
++	down(&priv->chip_drv->lock);
++	
++	
++	/* Wait until finished previous command. */
++	if (wait_till_ready(bank,ctrl_drv))
++	{
++		up(&priv->chip_drv->lock);
++		return -1;
++	}
++
++	if (address32 == ADDRESS_DIE_LO3_HI4_BYTE) {
++		if(sect_addr>=ADDR_32MB){
++			spi_generic_select_die( bank, 1,ctrl_drv);
++			had_switch_die = 1;
++			sect_addr-=ADDR_32MB;
++		}
++	}
++
++    if (ractrends_spiflash_flash_id[bank] == 0x00EF1940)
++    {
++        u8 reg_data;
++
++        command[0] = 0x15; /* Read Status Register S23 ~ S16 */
++        cmd_size = 1;
++        retval = ctrl_drv->spi_transfer(bank,command, cmd_size ,SPI_READ, &reg_data, 1);
++        pwr_up_mode = (reg_data & 0x2)>>1; /* S17(ADP) field */
++    }
++
++	/* Logic for 4 byte address mode Enter */
++	if ( ((sect_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE )||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++	{
++		retval = enter_4byte_addr_mode(bank, ctrl_drv);
++		if (retval < 0)
++		{
++			printk ("Unable to enter 4 byte address mode\n");
++			if(had_switch_die == 1)
++			{
++				spi_generic_select_die( bank, 0,ctrl_drv);
++			}
++			up(&priv->chip_drv->lock);
++			return spi_error(retval);
++		}
++	}
++
++	if (ractrends_spiflash_flash_id[bank]  == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++	if ((ractrends_spiflash_flash_id[bank]  == 0x002020BA) || (ractrends_spiflash_flash_id[bank]  == 0x002021BA) || (ractrends_spiflash_flash_id[bank]  == 0x00C21A20))
++		spi_generic_extended_address(bank, SPI_WRITE, (sect_addr & 0xFF000000) >> 24, ctrl_drv);
++
++	if ( (((sect_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || (address32 == ADDRESS_4BYTE)) || pwr_up_mode)
++	{
++		/* Set up command buffer. */
++		command[0] = OPCODE_SE;
++		if (ractrends_spiflash_flash_id[bank] == 0x00011902) command[0] = 0xDC; // ERASE command in 4byte mode [spansion only]
++		if (address32 == ADDRESS_DIE_LO3_HI4_BYTE) command[0] = 0xDC; // ERASE command in 4byte mode
++		command[1] = sect_addr >> 24;
++		command[2] = sect_addr >> 16;
++		command[3] = sect_addr >> 8;
++		command[4] = sect_addr;
++
++		cmd_size = 5;
++	}
++	else {
++		/* Set up command buffer. */
++		command[0] = OPCODE_SE;
++		command[1] = sect_addr >> 16;
++		command[2] = sect_addr >> 8;
++		command[3] = sect_addr;
++
++		cmd_size = 4;
++	}
++
++	/* Issue Controller Transfer Routine */
++	spi_generic_write_enable(bank,ctrl_drv); /* Send write enable */
++	retval = ctrl_drv->spi_transfer(bank,command, cmd_size ,SPI_NONE, NULL, 0);
++	spi_generic_write_disable(bank,ctrl_drv); /* Send write disable */
++
++	if (ractrends_spiflash_flash_id[bank] == 0x002020BA || ractrends_spiflash_flash_id[bank] == 0x002021BA)
++	{
++		/* requires the read flag status with at latest one byte. */
++		if (require_read_flag_status(bank,ctrl_drv))
++		{
++			up(&priv->chip_drv->lock);
++			return -1;
++		}
++	}
++
++	if (retval < 0)
++	{
++		//if 4 byte mode exit
++		if ( ((sect_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++		{
++			retval = exit_4byte_addr_mode(bank, ctrl_drv);
++			if (retval < 0)
++			{
++				printk ("Unable to exit 4 byte address mode\n");
++			}
++		}
++
++		if (ractrends_spiflash_flash_id[bank] == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++		if ((ractrends_spiflash_flash_id[bank] == 0x002020BA) || (ractrends_spiflash_flash_id[bank] == 0x002021BA) || (ractrends_spiflash_flash_id[bank] == 0x00C21A20))
++			spi_generic_extended_address(bank, SPI_WRITE, 0x00, ctrl_drv);
++
++		if(had_switch_die == 1)
++		{
++			spi_generic_select_die( bank, 0,ctrl_drv);
++		}
++		up(&priv->chip_drv->lock);
++		return spi_error(retval);
++	}
++
++	if ( ((sect_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++	{
++		retval = exit_4byte_addr_mode(bank, ctrl_drv);
++		if (retval < 0)
++		{
++			printk ("Unable to exit 4 byte address mode\n");
++		}
++	}
++
++	if (ractrends_spiflash_flash_id[bank] == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++	if ((ractrends_spiflash_flash_id[bank] == 0x002020BA) || (ractrends_spiflash_flash_id[bank] == 0x002021BA) || (ractrends_spiflash_flash_id[bank] == 0x00C21A20))
++		spi_generic_extended_address(bank, SPI_WRITE, 0x00, ctrl_drv);
++
++	if(had_switch_die == 1)
++	{
++		spi_generic_select_die( bank, 0,ctrl_drv);
++	}
++	up(&priv->chip_drv->lock);
++	return retval;
++}
++
++
++int
++spi_generic_read(struct map_info *map, loff_t addr, size_t bytes, unsigned char *buff)
++{
++	struct spi_flash_private *priv=map->fldrv_priv;
++	int bank = map->map_priv_1;
++	struct spi_ctrl_driver *ctrl_drv = priv->ctrl_drv;	
++	int retval = 0;
++	size_t transfer;
++	unsigned char command[6];
++	int cmd_size;
++	int  (*readfn)(int bank,unsigned char *,int , SPI_DIR, unsigned char *, unsigned long); //unsigned long);
++	int end_addr = (addr+bytes-1);	
++	u8 address32 = priv->address32;
++	//unsigned long flash_size = priv->size;
++	u8 had_switch_die = 0;
++    u8 pwr_up_mode = 0;
++	
++	/* Some time zero bytes length are sent */
++	if (bytes==0)
++		return 0;
++	
++    if (ractrends_spiflash_flash_id[bank] == 0x00EF1940)
++    {
++        u8 reg_data;
++
++        command[0] = 0x15; /* Read Status Register S23 ~ S16 */
++        cmd_size = 1;
++        retval = ctrl_drv->spi_transfer(bank,command, cmd_size ,SPI_READ, &reg_data, 1);
++        pwr_up_mode = (reg_data & 0x2)>>1; /* S17(ADP) field */
++    }
++
++	if (address32 == ADDRESS_DIE_LO3_HI4_BYTE)
++	{ 
++		if (addr < ADDR_32MB && end_addr >= ADDR_32MB)
++		{
++			int ErrorCode;
++			transfer = (ADDR_32MB - addr);
++			ErrorCode = spi_generic_read(map, addr, transfer, buff);
++			if (ErrorCode != 0) return ErrorCode;
++			 
++			 //fix address
++			bytes-=transfer;
++			addr+=transfer;
++			buff+=transfer;
++			
++			end_addr = (addr+bytes-1);
++			if (bytes==0) return 0;
++		}
++	}
++	down(&priv->chip_drv->lock);
++	
++	
++	
++	/* Wait until finished previous command. */
++	if (wait_till_ready(bank,ctrl_drv))
++	{
++		up(&priv->chip_drv->lock);
++		return -1;
++	}
++
++	if (address32 == ADDRESS_DIE_LO3_HI4_BYTE){
++		if(addr >= ADDR_32MB){
++			spi_generic_select_die( bank, 1,ctrl_drv);
++			had_switch_die = 1;
++			addr-=ADDR_32MB;
++			end_addr = (addr+bytes-1);
++		}
++	}
++	
++	if (ctrl_drv->spi_burst_read)
++		readfn = ctrl_drv->spi_burst_read;
++	else
++		readfn = ctrl_drv->spi_transfer;
++
++	transfer=bytes;
++
++
++	/* Logic for 4 byte address mode Enter */
++	if ( (( end_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE )||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++	{
++		//printk ("Trying to enter 4 byte mode\n");
++		retval = enter_4byte_addr_mode(bank, ctrl_drv);
++		if (retval < 0)
++		{
++			printk ("Unable to enter 4 byte address mode\n");
++			if(had_switch_die == 1)
++			{
++				spi_generic_select_die( bank, 0,ctrl_drv);
++			}
++			up(&priv->chip_drv->lock);
++			return spi_error(retval);
++		}
++	}
++
++	if (ractrends_spiflash_flash_id[bank] == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++	if ((ractrends_spiflash_flash_id[bank] == 0x002020BA) || (ractrends_spiflash_flash_id[bank] == 0x002021BA) || (ractrends_spiflash_flash_id[bank] == 0x00C21A20))
++		spi_generic_extended_address(bank, SPI_WRITE, (addr & 0xFF000000) >> 24, ctrl_drv);
++
++	while (bytes)
++	{
++		if (ctrl_drv->spi_burst_read)
++			transfer=bytes;
++		else
++		{
++			transfer=ctrl_drv->max_read;
++			if (transfer > bytes)
++				transfer = bytes;
++		}
++
++		if (!ctrl_drv->fast_read)
++		{
++			if ( ((( end_addr  >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || (address32 == ADDRESS_4BYTE)) || pwr_up_mode )
++			{
++				/* Set up command buffer. */	/* Normal Read */
++				command[0] = OPCODE_READ;
++				if (ractrends_spiflash_flash_id[bank] == 0x00011902) command[0] = 0x13; // READ command in 4byte mode [spansion only]
++				if (address32 == ADDRESS_DIE_LO3_HI4_BYTE) command[0] = 0x13; // READ command in 4byte mode
++				command[1] = addr >> 24;
++				command[2] = addr >> 16;
++				command[3] = addr >> 8;
++				command[4] = addr;
++
++				cmd_size = 5;
++			}
++			else {
++
++				/* Set up command buffer. */	/* Normal Read */
++				command[0] = OPCODE_READ;
++				command[1] = addr >> 16;
++				command[2] = addr >> 8;
++				command[3] = addr;
++
++				cmd_size = 4;
++			}
++			/* Issue Controller Transfer Routine */
++			retval = (*readfn)(bank,command, cmd_size ,SPI_READ, buff, (unsigned long)transfer);
++		}
++		else if (ctrl_drv->fast_read == 1) // Need to check Fast Read in 4 byte address mode
++		{
++			if ( ((( end_addr  >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || (address32 == ADDRESS_4BYTE)) || pwr_up_mode )
++			{ 
++				/* Set up command buffer. */   /* Fast Read */
++				command[0] = OPCODE_FAST_READ;
++				if (ractrends_spiflash_flash_id[bank] == 0x00011902) command[0] = 0x0C; // FAST_READ command in 4byte mode [spansion only]
++				if (address32 == ADDRESS_DIE_LO3_HI4_BYTE) command[0] = 0x0C; // FAST_READ command in 4byte mode
++				command[1] = addr >> 24;
++				command[2] = addr >> 16;
++				command[3] = addr >> 8;
++				command[4] = addr;
++				command[5] = 0;			/* dummy data */
++
++				cmd_size = 6;
++			}
++			else
++			{
++				/* Set up command buffer. */   /* Fast Read */
++				command[0] = OPCODE_FAST_READ;
++				command[1] = addr >> 16;
++				command[2] = addr >> 8;
++				command[3] = addr;
++				command[4] = 0;			/* dummy data */
++
++				cmd_size = 5;
++			}
++			/* Issue Controller Transfer Routine */
++			retval = (*readfn)(bank,command, cmd_size ,SPI_READ, buff, (unsigned long)transfer);
++		}
++		else if (ctrl_drv->fast_read == 2) // Need to check Dual Read in 4 byte address mode
++		{
++			if ( ((( end_addr  >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || (address32 == ADDRESS_4BYTE)) || pwr_up_mode )
++			{ 
++				/* Set up command buffer. */   /* Dual Read */
++				command[0] = OPCODE_DREAD;
++				command[1] = addr >> 24;
++				command[2] = addr >> 16;
++				command[3] = addr >> 8;
++				command[4] = addr;
++				command[5] = 0;			/* dummy data */
++
++				cmd_size = 6;
++			}
++			else
++			{ 
++				/* Set up command buffer. */   /* Dual Read */
++				command[0] = OPCODE_DREAD;
++				command[1] = addr >> 16;
++				command[2] = addr >> 8;
++				command[3] = addr;
++				command[4] = 0;			/* dummy data */
++
++				cmd_size = 5;
++			}
++			/* Issue Controller Transfer Routine */
++			retval = (*readfn)(bank,command, cmd_size ,SPI_READ, buff, (unsigned long)transfer);
++		}		
++		else if (ctrl_drv->fast_read == 3) // Need to check 2xI/O Read in 4 byte address mode 
++		{
++			if ( ((( end_addr  >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || (address32 == ADDRESS_4BYTE)) || pwr_up_mode )
++			{ 
++				/* Set up command buffer. */   /* 2xI/O Read */
++				command[0] = OPCODE_2READ;
++				command[1] = addr >> 24;
++				command[2] = addr >> 16;
++				command[3] = addr >> 8;
++				command[4] = addr;
++				command[5] = 0;			/* dummy data */
++
++				cmd_size = 6;
++			}
++			else
++			{ 
++				/* Set up command buffer. */   /* 2xI/O Read */
++				command[0] = OPCODE_2READ;
++				command[1] = addr >> 16;
++				command[2] = addr >> 8;
++				command[3] = addr;
++				command[4] = 0;			/* dummy data */
++
++				cmd_size = 5;
++			}
++			/* Issue Controller Transfer Routine */
++			retval = (*readfn)(bank,command, cmd_size ,SPI_READ, buff, (unsigned long)transfer);
++		}
++
++		if (retval < 0)
++		{
++			//if 4 byte mode, exit
++			if ( (( end_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++			{
++				retval = exit_4byte_addr_mode(bank, ctrl_drv);
++				if (retval < 0)
++				{
++					printk ("Unable to exit 4 byte address mode\n");
++				}
++			}
++
++			if (ractrends_spiflash_flash_id[bank] == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++			if ((ractrends_spiflash_flash_id[bank] == 0x002020BA) || (ractrends_spiflash_flash_id[bank] == 0x002021BA) || (ractrends_spiflash_flash_id[bank] == 0x00C21A20))
++				spi_generic_extended_address(bank, SPI_WRITE, 0x00, ctrl_drv);
++
++			if(had_switch_die == 1)
++			{
++				spi_generic_select_die( bank, 0,ctrl_drv);
++			}
++			up(&priv->chip_drv->lock);
++			return spi_error(retval);
++		}
++
++		bytes-=transfer;
++		addr+=transfer;
++		buff+=transfer;
++	}
++
++	//if 4 byte mode exit
++	if ( (( end_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++	{
++		//printk ("Trying to exit 4 byte mode\n");
++		retval = exit_4byte_addr_mode(bank, ctrl_drv);
++		if (retval < 0)
++		{
++			printk ("Unable to exit 4 byte address mode\n");
++		}
++	}
++
++	if (ractrends_spiflash_flash_id[bank]  == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++	if ((ractrends_spiflash_flash_id[bank]  == 0x002020BA) || (ractrends_spiflash_flash_id[bank]  == 0x002021BA) || (ractrends_spiflash_flash_id[bank]  == 0x00C21A20))
++		spi_generic_extended_address(bank, SPI_WRITE, 0x00, ctrl_drv);
++
++	if(had_switch_die == 1)
++	{
++		spi_generic_select_die( bank, 0,ctrl_drv);
++	}
++	up(&priv->chip_drv->lock);
++	return 0;
++}
++
++
++int
++spi_generic_write(struct map_info *map, loff_t addr, size_t bytes, const unsigned char *buff)
++{
++	struct spi_flash_private *priv=map->fldrv_priv;
++	int bank = map->map_priv_1;
++	struct spi_ctrl_driver *ctrl_drv = priv->ctrl_drv;
++	
++	int retval;
++	unsigned char command[5];
++	size_t transfer;
++	int cmd_size = 0;
++	int end_addr = (addr+bytes-1);
++	u8 address32 = priv->address32;
++	//unsigned long flash_size = priv->size;
++	u8 had_switch_die = 0;
++    u8 pwr_up_mode = 0;
++	
++	/* Some time zero bytes length are sent */
++	if (bytes==0)
++		return 0;
++
++    if (ractrends_spiflash_flash_id[bank] == 0x00EF1940)
++    {
++        u8 reg_data;
++
++        command[0] = 0x15; /* Read Status Register S23 ~ S16 */
++        cmd_size = 1;
++        retval = ctrl_drv->spi_transfer(bank,command, cmd_size ,SPI_READ, &reg_data, 1);
++        pwr_up_mode = (reg_data & 0x2)>>1; /* S17(ADP) field */
++    }
++
++	if (address32 == ADDRESS_DIE_LO3_HI4_BYTE)
++	{ 
++		if (addr < ADDR_32MB && end_addr >= ADDR_32MB)
++		{
++			int ErrorCode;
++			transfer = (ADDR_32MB - addr);
++			ErrorCode = spi_generic_write(map, addr, transfer, buff);
++			if (ErrorCode != 0) return ErrorCode;
++			 
++			 //fix address
++			bytes-=transfer;
++			addr+=transfer;
++			buff+=transfer;
++			
++			end_addr = (addr+bytes-1);
++			if (bytes==0) return 0;
++		}
++	}
++
++	down(&priv->chip_drv->lock);
++	
++	if (address32 == ADDRESS_DIE_LO3_HI4_BYTE){
++		if(addr >= ADDR_32MB){
++			spi_generic_select_die( bank, 1,ctrl_drv);
++			had_switch_die = 1;
++			addr-=ADDR_32MB;
++			end_addr = (addr+bytes-1);
++		}
++	}
++	
++	/* Logic for 4 byte address mode Enter */
++	if ( (( end_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++	{
++		retval = enter_4byte_addr_mode(bank, ctrl_drv);
++		if (retval < 0)
++		{
++			printk ("Unable to enter 4 byte address mode\n");
++			if(had_switch_die == 1)
++			{
++				spi_generic_select_die( bank, 0,ctrl_drv);
++			}
++			up(&priv->chip_drv->lock);
++			return spi_error(retval);
++		}
++	}
++
++	if (ractrends_spiflash_flash_id[bank]  == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++	if ((ractrends_spiflash_flash_id[bank]  == 0x002020BA) || (ractrends_spiflash_flash_id[bank]  == 0x002021BA) || (ractrends_spiflash_flash_id[bank]  == 0x00C21A20))
++		spi_generic_extended_address(bank, SPI_WRITE, (addr & 0xFF000000) >> 24, ctrl_drv);
++
++	while (bytes)
++	{
++		/* Wait until finished previous command. */
++		if (wait_till_ready(bank,ctrl_drv))
++		{
++			if(had_switch_die == 1)
++			{
++				spi_generic_select_die( bank, 0,ctrl_drv);
++			}
++			up(&priv->chip_drv->lock);
++			return -1;
++		}
++
++		transfer = PROGRAM_PAGE_SIZE;
++		if (bytes <  transfer)
++			transfer = bytes;
++
++		if (!ctrl_drv->fast_write)
++		{
++			if ( (((end_addr >= ADDR_16MB) && (address32 == ADDRESS_LO3_HI4_BYTE)) || (address32 == ADDRESS_4BYTE)) || pwr_up_mode) 
++			{
++				/* Set up command buffer. */
++				command[0] = OPCODE_PP;
++				if (ractrends_spiflash_flash_id[bank]  == 0x00011902) command[0] = 0x12; // PROGRAM command in 4byte mode [spansion only]
++				if (address32 == ADDRESS_DIE_LO3_HI4_BYTE) command[0] = 0x12; // PROGRAM command in 4byte mode
++				command[1] = addr >> 24;
++				command[2] = addr >> 16;
++				command[3] = addr >> 8;
++				command[4] = addr;
++				cmd_size = 5;
++			}
++			else {
++				/* Set up command buffer. */
++				command[0] = OPCODE_PP;
++				command[1] = addr >> 16;
++				command[2] = addr >> 8;
++				command[3] = addr;
++				cmd_size = 4;
++			}
++		}
++
++		/* Issue Controller Transfer Routine */
++		spi_generic_write_enable(bank,ctrl_drv); /* Send write enable */
++		retval = ctrl_drv->spi_transfer(bank,command,cmd_size ,SPI_WRITE,
++						(unsigned char *)buff, transfer);
++		spi_generic_write_disable(bank,ctrl_drv); /* Send write disable */
++
++		if (ractrends_spiflash_flash_id[bank]  == 0x002020BA || ractrends_spiflash_flash_id[bank]  == 0x002021BA)
++		{
++			/* requires the read flag status with at latest one byte. */
++			if (require_read_flag_status(bank,ctrl_drv))
++			{
++				up(&priv->chip_drv->lock);
++				return -1;
++			}
++		}
++
++		if (retval < 0)
++		{
++			//if 4 byte mode exit
++			if ( (( end_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++			{
++				retval = exit_4byte_addr_mode(bank, ctrl_drv);
++				if (retval < 0)
++				{
++					printk ("Unable to exit 4 byte address mode\n");
++				}
++			}
++
++			if (ractrends_spiflash_flash_id[bank]  == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++			if ((ractrends_spiflash_flash_id[bank]  == 0x002020BA) || (ractrends_spiflash_flash_id[bank]  == 0x002021BA) || (ractrends_spiflash_flash_id[bank]  == 0x00C21A20))
++				spi_generic_extended_address(bank, SPI_WRITE, 0x00, ctrl_drv);
++
++			if(had_switch_die == 1)
++			{
++				spi_generic_select_die( bank, 0,ctrl_drv);
++			}
++			up(&priv->chip_drv->lock);
++			return spi_error(retval);
++		}
++		addr+=(transfer-retval);
++		buff+=(transfer-retval);
++		bytes-=(transfer-retval);
++	}
++
++	//if 4 byte mode exit
++	if ( (( end_addr >= ADDR_16MB) && ((address32 == ADDRESS_LO3_HI4_BYTE)||(address32 == ADDRESS_DIE_LO3_HI4_BYTE))) || pwr_up_mode)
++	{
++		retval = exit_4byte_addr_mode(bank, ctrl_drv);
++		if (retval < 0)
++		{
++			printk ("Unable to exit 4 byte address mode\n");
++		}
++	}
++
++	if (ractrends_spiflash_flash_id[bank]  == 0x00EF1940) w25q256_force_extended_address(bank, ctrl_drv);
++	if ((ractrends_spiflash_flash_id[bank]  == 0x002020BA) || (ractrends_spiflash_flash_id[bank]  == 0x002021BA) || (ractrends_spiflash_flash_id[bank]  == 0x00C21A20))
++		spi_generic_extended_address(bank, SPI_WRITE, 0x00, ctrl_drv);
++
++	if(had_switch_die == 1)
++	{
++		spi_generic_select_die( bank, 0,ctrl_drv);
++	}
++	up(&priv->chip_drv->lock);
++	return 0;
++}
++
++/***********************************************************************************/
++extern int spi_verbose;
++int
++spi_generic_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info,
++			char *spi_name,struct spi_flash_info *spi_list, int spi_list_len)
++{
++	int  retval;
++	u32 val;
++	int i;
++	u16 opread;
++	u16 opwrite;
++	u8 code = OPCODE_RDID;
++	//int address_mode = 0;
++	
++	if (spi_verbose == 2)
++		printk("SPI: probing for %s devices ...\n",spi_name);
++
++	/* Send write enable */
++	retval =spi_generic_write_enable(bank,ctrl_drv);
++	if (retval < 0)
++	 	return -1;
++	
++	/* Issue Controller Transfer Routine */
++	val = 0;
++	retval = ctrl_drv->spi_transfer(bank,&code, 1,SPI_READ,(unsigned char *)&val, 3);
++	val &= 0x00FFFFFF;
++
++	if (retval < 0)
++	{
++		spi_error(retval);
++		return -1;
++	}
++
++	/* Send write disable */
++	retval = spi_generic_write_disable(bank,ctrl_drv);
++	if (retval < 0)
++		return -1;
++
++	/* Match the ID against the table entries */
++	for (i = 0; i < spi_list_len; i++)
++	{
++		if ((spi_list[i].mfr_id == ((val)& 0xFF)) && (spi_list[i].dev_id == ((val >> 8)& 0xFFFF)))
++		{
++			/* Check Operation Mode */
++			//for Read Operation
++			opread = (spi_list[i].operationmode & 0xFFFF);
++			opread &= ctrl_drv->operation_mode_mask;
++			if (opread > 0x7)
++			{
++				ctrl_drv->fast_read = 3;
++			}
++			else if ((0x3 < opread) && (opread  <= 0x7))
++			{
++				ctrl_drv->fast_read = 2;
++			}
++			else if ((0x1 < opread) && (opread <= 0x3))
++			{
++				ctrl_drv->fast_read = 1;
++			}
++			else if (opread <= 0x1)
++			{
++				ctrl_drv->fast_read = 0;
++			}
++			
++			//for Write Operation
++			opwrite = (spi_list[i].operationmode >> 16);
++			opwrite &= (ctrl_drv->operation_mode_mask >> 16);
++			if (opwrite <= 0x1)
++			{
++				ctrl_drv->fast_write = 0;
++			}
++			
++		  break;
++		}
++	}
++
++	if (i == spi_list_len)
++	{
++//		if (spi_verbose == 2)
++//			printk("%s : Unrecognized ID (0x%x) got \n",spi_name,val);
++		return -1;
++	}
++	memcpy(chip_info,&spi_list[i],sizeof(struct spi_flash_info));
++
++	if (spi_verbose > 0)
++		printk(KERN_INFO"Found SPI Chip %s \n",spi_list[i].name);
++
++	return 0;
++
++}
++
++EXPORT_SYMBOL(spi_generic_probe);
++EXPORT_SYMBOL(spi_generic_erase);
++EXPORT_SYMBOL(spi_generic_read);
++EXPORT_SYMBOL(spi_generic_write);
++EXPORT_SYMBOL(spi_generic_write_disable);
++EXPORT_SYMBOL(spi_generic_write_enable);
++EXPORT_SYMBOL(spi_generic_read_status);
++EXPORT_SYMBOL(spi_generic_write_status);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for Generic SPI flash chips");
++
++#endif
+diff --git a/drivers/mtd/spichips/intels33.c b/drivers/mtd/spichips/intels33.c
+new file mode 100644
+index 0000000..6900319
+--- /dev/null
++++ b/drivers/mtd/spichips/intels33.c
+@@ -0,0 +1,96 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++/* Name, ID1, ID2 , Size, Clock, Erase regions, address mode,{ Offset, Erase Size, Erase Block Count } */
++/* address mode:  0x00 -3 byte address
++			 	0x01 - 4 byte address	
++			 	0x02 - Low byte: 3 byte address, High byte: 4 byte address*/
++static struct spi_flash_info s33_data [] = 
++{
++	/* Intel S33  64 K Sectors */
++	{ "Intel S33 16Mb"  , 0x89, 0x1189, 0x00010001, 0x200000 , 68 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 32  },} },
++	{ "Intel S33 32Mb"  , 0x89, 0x1289, 0x00010001, 0x400000 , 68 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 64  },} },
++	{ "Intel S33 64Mb"  , 0x89, 0x1389, 0x00010001, 0x800000 , 68 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 128 },} },
++};
++
++
++static
++int 
++s33_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info)
++{
++	int retval;
++	retval = spi_generic_probe(bank,ctrl_drv,chip_info,"intel s33",
++						s33_data,ARRAY_SIZE(s33_data));	
++
++	if (retval == -1)
++		return retval;
++
++	/* UnProctect all sectors */
++ 	/* SRWD=0 (Bit 7)  BP0,BP1,BP2 = 0 (Bit 2,3,4) */
++	if (spi_generic_write_status(bank,ctrl_drv,0x0) < 0)
++		printk("intel s33: Unable to Unprotect all sectors\n");
++	return retval;
++}
++
++struct spi_chip_driver s33_driver =
++{
++	.name 		= "intel s33",
++	.module 	= THIS_MODULE,
++	.probe	 	= s33_probe,
++	.erase_sector 	= spi_generic_erase,
++	.read_bytes	= spi_generic_read,
++	.write_bytes	= spi_generic_write,
++};
++
++int 
++s33_init(void)
++{
++	sema_init(&s33_driver.lock, 1);
++#ifdef __UBOOT__	/* MIPS */
++	s33_driver.probe	 		= s33_probe;
++	s33_driver.erase_sector 	= spi_generic_erase;
++	s33_driver.read_bytes		= spi_generic_read;
++	s33_driver.write_bytes		= spi_generic_write;
++#endif
++	register_spi_chip_driver(&s33_driver);
++	return 0;
++}
++
++void 
++s33_exit(void)
++{
++	sema_init(&s33_driver.lock, 1);
++	unregister_spi_chip_driver(&s33_driver);
++	return;
++}
++
++module_init(s33_init);
++module_exit(s33_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for Intel S33 flash chips");
++
++#endif
+diff --git a/drivers/mtd/spichips/m25pxx.c b/drivers/mtd/spichips/m25pxx.c
+new file mode 100644
+index 0000000..448fe06
+--- /dev/null
++++ b/drivers/mtd/spichips/m25pxx.c
+@@ -0,0 +1,121 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++/* Name, ID1, ID2 , Size, Clock, Erase regions, address mode,{ Offset, Erase Size, Erase Block Count } */
++/* address mode: 0x00 -3 byte address
++			      0x01 - 4 byte address	
++			      0x02 - Low byte: 3 byte address, High byte: 4 byte address*/
++static struct spi_flash_info m25pxx_data [] = 
++{
++	/* ST Micro 32K Sectors */
++	{ "ST Micro m25p05A" , 0x20, 0x1020, 0x00010001, 0x010000 , 50 * 1000000, 1, 0x00, {{ 0, 32  * 1024, 2   },} },
++	{ "ST Micro m25p10A" , 0x20, 0x1120, 0x00010001, 0x020000 , 50 * 1000000, 1, 0x00, {{ 0, 32  * 1024, 4   },} },
++
++	/* ST Micro 64 K Sectors */
++	{ "ST Micro m25p20"  , 0x20, 0x1220, 0x00010001, 0x040000 , 75 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 4   },} },
++	{ "ST Micro m25p40"  , 0x20, 0x1320, 0x00010001, 0x080000 , 75 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 8   },} },
++	{ "ST Micro m25p80"  , 0x20, 0x1420, 0x00010001, 0x100000 , 75 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 16  },} },
++	{ "ST Micro m25p16"  , 0x20, 0x1520, 0x00010001, 0x200000 , 75 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 32  },} },
++	{ "ST Micro m25p32"  , 0x20, 0x1620, 0x00010001, 0x400000 , 75 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 64  },} },
++	{ "ST Micro m25p64"  , 0x20, 0x1720, 0x00010001, 0x800000 , 75 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 128 },} },
++	{ "ST Micro m25px64"  , 0x20, 0x1771, 0x00010001, 0x800000 , 75 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 128 },} },
++
++	/* ST Micro 256K Sectors */
++	{ "ST Micro m25p128" , 0x20, 0x1820, 0x00010001, 0x1000000, 50 * 1000000, 1, 0x00, {{ 0, 256 * 1024, 64  },} },
++
++	/* ST Micro 64 K Sectors, 25MHz speed */
++	{ "ST Micro m45p20"  , 0x20, 0x1240, 0x00010001, 0x040000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 4   },} },
++	{ "ST Micro m45p40"  , 0x20, 0x1340, 0x00010001, 0x080000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 8   },} },
++	{ "ST Micro m45p80"  , 0x20, 0x1440, 0x00010001, 0x100000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 16  },} },
++	{ "ST Micro m45p16"  , 0x20, 0x1540, 0x00010001, 0x200000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 32  },} },
++	{ "ST Micro m45p32"  , 0x20, 0x1640, 0x00010001, 0x400000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 64  },} },
++	{ "ST Micro m45p64"  , 0x20, 0x1740, 0x00010001, 0x800000 , 25 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 128 },} },
++
++};
++
++
++static
++int 
++m25pxx_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info)
++{
++	int retval;
++	retval = spi_generic_probe(bank,ctrl_drv,chip_info,"m25pxx",
++						m25pxx_data,ARRAY_SIZE(m25pxx_data));	
++
++	if (retval == -1)
++		return retval;
++
++	/* UnProctect all sectors */
++ 	/* SRWD=0 (Bit 7)  BP0,BP1,BP2 = 0 (Bit 2,3,4) */
++	if (spi_generic_write_status(bank,ctrl_drv,0x0) < 0)
++		printk("m25pxx: Unable to Unprotect all sectors\n");
++
++	return retval;
++}
++
++struct spi_chip_driver m25pxx_driver =
++{
++	.name 		= "m25pxx",
++	.module 	= THIS_MODULE,
++	.probe	 	= m25pxx_probe,
++	.erase_sector 	= spi_generic_erase,
++	.read_bytes	= spi_generic_read,
++	.write_bytes	= spi_generic_write,
++};
++
++
++
++int 
++m25pxx_init(void)
++{
++	sema_init(&m25pxx_driver.lock, 1);
++#ifdef __UBOOT__	/* MIPS */
++	m25pxx_driver.probe	 		= m25pxx_probe;
++	m25pxx_driver.erase_sector 	= spi_generic_erase;
++	m25pxx_driver.read_bytes	= spi_generic_read;
++	m25pxx_driver.write_bytes	= spi_generic_write;
++#endif
++	register_spi_chip_driver(&m25pxx_driver);
++	return 0;
++}
++
++
++void 
++m25pxx_exit(void)
++{
++	sema_init(&m25pxx_driver.lock, 1);
++	unregister_spi_chip_driver(&m25pxx_driver);
++	return;
++}
++
++
++module_init(m25pxx_init);
++module_exit(m25pxx_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for ST M25Pxx flash chips");
++
++#endif
+diff --git a/drivers/mtd/spichips/macronix.c b/drivers/mtd/spichips/macronix.c
+new file mode 100644
+index 0000000..176d101
+--- /dev/null
++++ b/drivers/mtd/spichips/macronix.c
+@@ -0,0 +1,208 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++#define CMD_MX25XX_RDSCUR		0x2B	/* Read security register */
++#define CMD_MX25XX_RDCR			0x15	/* Read configuration register */
++
++/* Security register */
++#define SCUR_BIT2			0x04
++
++/* Configuration register */
++#define CR_BIT5				0x20
++
++#define ADDRESS_3BYTE	0x00
++#define ADDRESS_4BYTE	0x01
++#define ADDRESS_LO3_HI4_BYTE 0x02
++#define MX25L25x35E_MFR_ID 0xC2 
++#define MX25L25x35E_DEV_ID 0x1920
++
++
++/* Name, ID1, ID2 , Size, Clock, Erase regions, address mode,{ Offset, Erase Size, Erase Block Count } */
++/* address mode:  0x00 -3 byte address
++			 	0x01 - 4 byte address	
++			 	0x02 - Low byte: 3 byte address, High byte: 4 byte address*/
++static struct spi_flash_info macronix_data [] = 
++{
++	/* Macronix 64 K Sectors */
++	{ "Macronix MX25L1605D" , 0xC2, 0x1520, 0x0001000B, 0x200000 , 66 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 32 },} },
++	{ "Macronix MX25L3205D" , 0xC2, 0x1620, 0x0001000B, 0x400000 , 66 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 64 },} },
++	{ "Macronix MX25L6405D" , 0xC2, 0x1720, 0x0001000B, 0x800000 , 66 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 128 },} },
++	{ "Macronix MX25L12805D", 0xC2, 0x1820, 0x00010001, 0x1000000, 50 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 256 },} },
++   	{ "Macronix MX25L25635E", 0xC2, 0x1920, 0x0001000F, 0x2000000, 50 * 1000000, 1, 0x02, {{ 0, 64  * 1024, 512 },} },
++    	{ "Macronix MX25L25735E", 0xC2, 0x1920, 0x0001000F, 0x2000000, 50 * 1000000, 1, 0x01, {{ 0, 64  * 1024, 512 },} },      
++    	{ "Macronix MX66L51235F", 0xC2, 0x1A20, 0x0001000F, 0x4000000, 50 * 1000000, 1, 0x02, {{ 0, 64  * 1024, 1024 },} },      
++    	{ "EON EN25QH256",        0x1C, 0x1970, 0x0001000F, 0x2000000, 50 * 1000000, 1, 0x02, {{ 0, 64  * 1024, 512 },} },      
++
++};
++
++/* to dinstinguish between MX25L25635/MX25L25735 E and F type */
++static int read_security_register(int bank, struct spi_ctrl_driver *ctrl_drv)
++{
++	u8 code = CMD_MX25XX_RDSCUR;
++	int retval;
++	unsigned char scur_reg;
++	
++	/* Issue Controller Transfer Routine*/ 
++	retval = ctrl_drv->spi_transfer(bank,&code, 1,SPI_READ,&scur_reg, 1);
++	if (retval < 0)
++	{
++		printk ("Could not read security register\n");
++		return -1;
++		
++	}
++
++	/* 0x00 - 3 byte mode
++	   0x04 - 4 byte mode */
++	scur_reg &= SCUR_BIT2;
++	
++	if(scur_reg == 0x04)
++		return ADDRESS_4BYTE;		// MX25L25735E
++	else
++		return ADDRESS_LO3_HI4_BYTE;	// MX25L25635E, MX25L25635F, MX25L25735F
++
++	return 0;
++}	
++
++/* to dinstinguish MX25L25635/MX25L25735 F type */
++static int read_configuration_register(int bank, struct spi_ctrl_driver *ctrl_drv)
++{
++	u8 code = CMD_MX25XX_RDCR;
++	int retval;
++	unsigned char conf_reg;
++
++	/* Issue Controller Transfer Routine */
++	retval = ctrl_drv->spi_transfer(bank,&code,1,SPI_READ,&conf_reg,1);
++	if (retval < 0)
++	{
++		printk ("Could not read configuration register\n");
++		return -1;
++	}
++
++	if (conf_reg == 0xFF) conf_reg = 0x00; // invalid value (maybe unsupported the RDCR command)
++
++	/* 0x00 - 3 byte mode
++	   0x20 - 4 byte mode */
++	conf_reg &= CR_BIT5;
++
++	if(conf_reg == CR_BIT5)
++		return ADDRESS_4BYTE;		// MX25L25735F
++	else
++		return ADDRESS_LO3_HI4_BYTE;	// MX25L25635E or MX25L25635F
++
++	return 0;
++}
++
++static
++int 
++macronix_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info)
++{
++	int retval;
++	int address_mode = 0;
++	int i=0;
++	
++	retval = spi_generic_probe(bank,ctrl_drv,chip_info,"macronix",
++						macronix_data,ARRAY_SIZE(macronix_data));	
++
++	if (retval == -1)
++		return retval;
++
++	/* MX25L25635E, MX25L25735E, MX25L25635F, MX25L25735F - the same ID code */
++	if((chip_info->mfr_id == MX25L25x35E_MFR_ID) && (chip_info->dev_id == MX25L25x35E_DEV_ID))
++	{
++		address_mode = read_security_register(bank, ctrl_drv);
++		if (address_mode == ADDRESS_LO3_HI4_BYTE) address_mode = read_configuration_register(bank, ctrl_drv);
++
++		if (address_mode == -1)
++			return address_mode;
++			
++		if(chip_info->address32 != address_mode)
++		{
++			memset(chip_info,0,sizeof(struct spi_flash_info));
++			for (i = 0; i < (ARRAY_SIZE(macronix_data)); i++)
++			{
++				if((macronix_data[i].mfr_id == MX25L25x35E_MFR_ID) && (macronix_data[i].dev_id == MX25L25x35E_DEV_ID))
++				{
++					if(macronix_data[i].address32 == address_mode)
++					{
++							
++					   break;
++					}
++				}
++	
++			}
++			memcpy(chip_info,&macronix_data[i],sizeof(struct spi_flash_info));
++		
++		}
++	
++	}
++
++	/* UnProctect all sectors */
++ 	/* SRWD=0 (Bit 7)  BP0,BP1,BP2 = 0 (Bit 2,3,4) */
++	if (spi_generic_write_status(bank,ctrl_drv,0x0) < 0)
++		printk("macronix: Unable to Unprotect all sectors\n");
++
++	return retval;
++}
++
++struct spi_chip_driver macronix_driver =
++{
++	.name 		= "macronix",
++	.module 	= THIS_MODULE,
++	.probe	 	= macronix_probe,
++	.erase_sector 	= spi_generic_erase,
++	.read_bytes	= spi_generic_read,
++	.write_bytes	= spi_generic_write,
++};
++
++int 
++macronix_init(void)
++{
++	sema_init(&macronix_driver.lock, 1);
++#ifdef __UBOOT__	/* MIPS */
++	macronix_driver.probe	 		= macronix_probe;
++	macronix_driver.erase_sector 	= spi_generic_erase;
++	macronix_driver.read_bytes	= spi_generic_read;
++	macronix_driver.write_bytes	= spi_generic_write;
++#endif
++	register_spi_chip_driver(&macronix_driver);
++	return 0;
++}
++
++void 
++macronix_exit(void)
++{
++	sema_init(&macronix_driver.lock, 1);
++	unregister_spi_chip_driver(&macronix_driver);
++	return;
++}
++
++module_init(macronix_init);
++module_exit(macronix_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for Macronix flash chips");
++
++#endif
+diff --git a/drivers/mtd/spichips/micron.c b/drivers/mtd/spichips/micron.c
+new file mode 100644
+index 0000000..e9f44ab
+--- /dev/null
++++ b/drivers/mtd/spichips/micron.c
+@@ -0,0 +1,104 @@
++/*
++ * Copyright (C) 2007-2013 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++/* Name, ID1, ID2 , Size, Clock, Erase regions, address mode, { Offset, Erase Size, Erase Block Count } */
++/* address mode:  0x00 -3 byte address
++				0x01 - 4 byte address	
++				0x02 - Low byte: 3 byte address, High byte: 4 byte address*/
++
++static struct spi_flash_info micron_data [] = 
++{
++	/* Micron 64 K Sectors */
++	{ "Micron/Numonyx N25Q00A"  , 0x20, 0x21BA, 0x00010001, 0x8000000  , 108 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 2048 },} },
++	{ "Micron/Numonyx N25Q512A"  , 0x20, 0x20BA, 0x00010001, 0x4000000 , 108 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 1024 },} },
++	{ "Micron/Numonyx N25Q256A"  , 0x20, 0x19BA, 0x00010001, 0x2000000 , 108 * 1000000, 1, 0x02, {{ 0, 64  * 1024, 512 },} },
++    { "Micron/Numonyx n25q128" , 0x20, 0x18BA, 0x00010001, 0x1000000, 50 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 256 },} },
++};
++
++
++static
++int 
++micron_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info)
++{
++	int retval;
++
++	retval = spi_generic_probe(bank,ctrl_drv,chip_info,"micron",
++						micron_data,ARRAY_SIZE(micron_data));	
++
++	if (retval == -1)
++		return retval;
++	
++	/* UnProctect all sectors */
++ 	/* SRWD=0 (Bit 7)  BP0,BP1,BP2 = 0 (Bit 2,3,4) */
++	if (spi_generic_write_status(bank,ctrl_drv,0x0) < 0)
++		printk("micron: Unable to Unprotect all sectors\n");
++
++	return retval;
++}
++
++struct spi_chip_driver micron_driver =
++{
++	.name 		= "micron",
++	.module 	= THIS_MODULE,
++	.probe	 	= micron_probe,
++	.erase_sector 	= spi_generic_erase,
++	.read_bytes	= spi_generic_read,
++	.write_bytes	= spi_generic_write,
++};
++
++
++
++int 
++micron_init(void)
++{
++	sema_init(&micron_driver.lock,1);
++#ifdef __UBOOT__	/* MIPS */
++	micron_driver.probe	 		= micron_probe;
++	micron_driver.erase_sector 	= spi_generic_erase;
++	micron_driver.read_bytes	= spi_generic_read;
++	micron_driver.write_bytes	= spi_generic_write;
++#endif
++	register_spi_chip_driver(&micron_driver);
++	return 0;
++}
++
++
++void 
++micron_exit(void)
++{
++	sema_init(&micron_driver.lock,1);
++	unregister_spi_chip_driver(&micron_driver);
++	return;
++}
++
++
++module_init(micron_init);
++module_exit(micron_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for micron flash chips");
++
++#endif
+diff --git a/drivers/mtd/spichips/spansion.c b/drivers/mtd/spichips/spansion.c
+new file mode 100644
+index 0000000..33a7bca
+--- /dev/null
++++ b/drivers/mtd/spichips/spansion.c
+@@ -0,0 +1,103 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++/* Name, ID1, ID2 , Size, Clock, Erase regions, address mode,{ Offset, Erase Size, Erase Block Count } */
++/* address mode:  0x00 -3 byte address
++				0x01 - 4 byte address	
++				0x02 - Low byte: 3 byte address, High byte: 4 byte address*/
++
++static struct spi_flash_info spansion_data [] = 
++{
++	/* Spansion 64 K Sectors */
++	{ "Spansion S25FL064A"  , 0x01, 0x1602, 0x00010001, 0x800000  , 104 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 128 },} },
++	{ "Spansion S25FL128P"  , 0x01, 0x1820, 0x00010001, 0x1000000 , 104 * 1000000, 1, 0x00, {{ 0, 64  * 1024, 256 },} },
++	{ "Spansion S25FL256S"  , 0x01, 0x1902, 0x00010001, 0x2000000 , 104 * 1000000, 1, 0x02, {{ 0, 64  * 1024, 512 },} },
++
++};
++
++
++static
++int 
++spansion_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info)
++{
++	int retval;
++	retval = spi_generic_probe(bank,ctrl_drv,chip_info,"spansion",
++						spansion_data,ARRAY_SIZE(spansion_data));	
++
++	if (retval == -1)
++		return retval;
++
++	/* UnProctect all sectors */
++ 	/* SRWD=0 (Bit 7)  BP0,BP1,BP2 = 0 (Bit 2,3,4) */
++	if (spi_generic_write_status(bank,ctrl_drv,0x0) < 0)
++		printk("spansion: Unable to Unprotect all sectors\n");
++
++	return retval;
++}
++
++struct spi_chip_driver spansion_driver =
++{
++	.name 		= "spansion",
++	.module 	= THIS_MODULE,
++	.probe	 	= spansion_probe,
++	.erase_sector 	= spi_generic_erase,
++	.read_bytes	= spi_generic_read,
++	.write_bytes	= spi_generic_write,
++};
++
++
++
++int 
++spansion_init(void)
++{
++	sema_init(&spansion_driver.lock, 1);
++#ifdef __UBOOT__	/* MIPS */
++	spansion_driver.probe	 		= spansion_probe;
++	spansion_driver.erase_sector 	= spi_generic_erase;
++	spansion_driver.read_bytes	= spi_generic_read;
++	spansion_driver.write_bytes	= spi_generic_write;
++#endif
++	register_spi_chip_driver(&spansion_driver);
++	return 0;
++}
++
++
++void 
++spansion_exit(void)
++{
++	sema_init(&spansion_driver.lock, 1);
++	unregister_spi_chip_driver(&spansion_driver);
++	return;
++}
++
++
++module_init(spansion_init);
++module_exit(spansion_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for Spansion flash chips");
++
++#endif
+diff --git a/drivers/mtd/spichips/spiaccess.c b/drivers/mtd/spichips/spiaccess.c
+new file mode 100644
+index 0000000..5412f72
+--- /dev/null
++++ b/drivers/mtd/spichips/spiaccess.c
+@@ -0,0 +1,433 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#include "spiflash.h"
++
++int spi_verbose = 1;
++
++
++/*----------------------------------------------------------------------------------*/
++/*           Low level functions which finally talk to the chip driver              */
++/*----------------------------------------------------------------------------------*/
++static void inline
++chip_unlock_sector(struct map_info *map, unsigned long sect_addr,int unlock)
++{
++	struct spi_flash_private *priv=map->fldrv_priv;
++
++	if (!priv->chip_drv->unlock_sector)
++		return;
++	(*priv->chip_drv->unlock_sector)(map,sect_addr,unlock);
++	return;
++}
++
++static int inline
++chip_is_sector_locked(struct map_info *map, unsigned long sect_addr)
++{
++	struct spi_flash_private *priv=map->fldrv_priv;
++
++	if (!priv->chip_drv->is_sector_locked)
++		return 0;
++	return (*priv->chip_drv->is_sector_locked)(map,sect_addr);
++}
++
++static int inline
++chip_read_bytes(struct map_info *map, loff_t addr, size_t bytes, unsigned char *buf)
++{
++	struct spi_flash_private *priv=map->fldrv_priv;
++
++	if (!priv->chip_drv->read_bytes)
++		return -1;
++	return (*priv->chip_drv->read_bytes)(map,addr,bytes,buf);
++}
++
++static int inline
++chip_write_bytes(struct map_info *map, loff_t addr, size_t bytes, const unsigned char *buf)
++{
++	struct spi_flash_private *priv=map->fldrv_priv;
++
++	if (!priv->chip_drv->write_bytes)
++		return -1;
++	return (*priv->chip_drv->write_bytes)(map,addr,bytes,buf);
++}
++
++static int inline
++chip_erase_sector(struct map_info *map, unsigned long sect_addr)
++{
++	struct spi_flash_private *priv=map->fldrv_priv;
++
++	if (!priv->chip_drv->erase_sector)
++		return -1;
++	return (*priv->chip_drv->erase_sector)(map,sect_addr);
++}
++
++
++void 
++spi_flash_sync(struct mtd_info *mtd)
++{
++	struct map_info *map = mtd->priv;
++	struct spi_flash_private *priv = map->fldrv_priv;
++
++	if (!priv->chip_drv->sync)
++		return;
++	(*priv->chip_drv->sync)(map);
++	return;
++}
++
++int 
++spi_flash_suspend(struct mtd_info *mtd)
++{
++	struct map_info *map = mtd->priv;
++	struct spi_flash_private *priv = map->fldrv_priv;
++
++	if (!priv->chip_drv->suspend)
++		return -EINVAL;
++	return (*priv->chip_drv->suspend)(map);
++}
++
++void
++spi_flash_resume(struct mtd_info *mtd)
++{
++	struct map_info *map = mtd->priv;
++	struct spi_flash_private *priv = map->fldrv_priv;
++
++	if (!priv->chip_drv->resume)
++		return;
++	(*priv->chip_drv->resume)(map);
++	return;
++}
++
++
++/*----------------------------------------------------------------------------------*/
++/*  Intermediate Functions which interfaces mtd functionss to chip driver fucntions */
++/*----------------------------------------------------------------------------------*/
++static int 
++spi_flash_do_unlock(struct mtd_info *mtd, loff_t ofs, uint32_t len,
++			       int is_unlock)
++{
++	struct map_info *map;
++	struct mtd_erase_region_info *merip;
++	int eraseoffset, erasesize, eraseblocks;
++	int i;
++	int retval = 0;
++	int lock_status;
++
++	map = mtd->priv;
++
++	/* Pass the whole chip through sector by sector and check for each
++	   sector if the sector and the given interval overlap */
++	for(i = 0; i < mtd->numeraseregions; i++) 
++	{
++		merip = &mtd->eraseregions[i];
++
++		eraseoffset = merip->offset;
++		erasesize = merip->erasesize;
++		eraseblocks = merip->numblocks;
++
++		if (ofs > eraseoffset + erasesize)
++			continue;
++
++		while (eraseblocks > 0) 
++		{
++			if (ofs < eraseoffset + erasesize && ofs + len > eraseoffset) 
++			{
++				chip_unlock_sector(map, eraseoffset, is_unlock);
++
++				lock_status = chip_is_sector_locked(map, eraseoffset);
++
++				if (is_unlock && lock_status) 
++				{
++					printk("Cannot unlock sector at address %x length %xx\n",
++					       eraseoffset, merip->erasesize);
++					retval = -1;
++				} 
++				else if (!is_unlock && !lock_status) 
++				{
++					printk("Cannot lock sector at address %x length %x\n",
++					       eraseoffset, merip->erasesize);
++					retval = -1;
++				}
++			}
++			eraseoffset += erasesize;
++			eraseblocks --;
++		}
++	}
++	return retval;
++}
++
++static int 
++read_one_chip(struct map_info *map, struct flchip *chip,
++			       loff_t adr, size_t len, u_char *buf)
++{
++	uint32_t	i;
++	size_t bytes;
++
++	chip->state = FL_READY;
++
++	bytes = SPI_READ_PAGE_SIZE;
++	i = 0;
++	while (len >= bytes) 
++	{
++		if (0 != chip_read_bytes(map,adr,bytes,&buf [i])) 
++		{
++			printk (KERN_ERR "spi_read failed in read_one_chip function\n");
++			return -1;
++		}
++		len -= bytes;
++		i   += bytes;
++		adr += bytes;
++	}	
++
++	if (0 != len) 
++	{
++		if (0 != chip_read_bytes(map, adr, len, &buf [i])) 
++		{
++			printk (KERN_ERR "spi_read failed in read_one_chip function\n");
++			return -1;
++		}
++	}
++
++	return 0;
++}
++
++static int
++write_one_chip(struct map_info *map, struct flchip *chip,
++	                        loff_t addr, size_t len, const u_char * buf)
++{
++	uint32_t page_size, page_offset;
++	uint32_t i;
++
++	chip->state = FL_WRITING;
++
++	/* what page do we start with? */
++	page_offset = addr % SPI_WRITE_PAGE_SIZE;
++
++	/* do all the bytes fit onto one page? */
++	if (page_offset + len <= SPI_WRITE_PAGE_SIZE) 
++	{
++		if (0 != chip_write_bytes (map, addr, len, buf)) 
++		{
++			printk (KERN_ERR "spi writing in the spi_write_bytes function failed\n");
++			return -1;
++		}
++	} 
++	else 
++	{
++		/* the size of data remaining on the first page */
++		page_size = SPI_WRITE_PAGE_SIZE - page_offset;
++		if (0 != chip_write_bytes (map, addr, page_size, buf))
++		{
++			printk (KERN_ERR "spi writing in the spi_write_bytes function failed\n");
++			return -1;
++		}
++		/* write everything in PAGESIZE chunks */
++		for (i = page_size; i < len; i += page_size) 
++		{
++			page_size = len - i;
++			if (page_size > SPI_WRITE_PAGE_SIZE)
++				page_size = SPI_WRITE_PAGE_SIZE;
++			if (0 != chip_write_bytes (map, (addr + i), page_size, (buf + i))) 
++			{
++				printk (KERN_ERR "spi writing in the spi_write_bytes function failed\n");
++				return -1;
++			}
++		}
++	}
++
++	chip->state = FL_READY;
++
++	return 0;
++
++}
++
++static  int 
++erase_one_block(struct map_info *map, struct flchip *chip,ulong addr)
++{
++	int	retval = 0;
++	
++	chip->state = FL_ERASING;
++
++	retval = chip_erase_sector (map,addr);
++
++	chip->state = FL_READY;
++
++	return (retval);
++}
++/*----------------------------------------------------------------------------------*/
++/*  		                       MTD Functions 					                */
++/*----------------------------------------------------------------------------------*/
++int 
++spi_flash_unlock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
++{
++	return spi_flash_do_unlock(mtd, ofs, len, 1);
++}
++
++int 
++spi_flash_lock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
++{
++	return spi_flash_do_unlock(mtd, ofs, len, 0);
++}
++
++int
++spi_flash_read(struct mtd_info *mtd, loff_t from, size_t len,
++                                          size_t *retlen, u_char *buf)
++{
++	struct map_info *map = mtd->priv;
++	struct spi_flash_private *private = map->fldrv_priv;
++	unsigned long ofs;
++	int ret = 0;
++
++	if ((from + len) > mtd->size) 
++	{
++		printk(KERN_WARNING "%s: read request past end of device "
++		       "(0x%lx)\n", map->name, (unsigned long)from + len);
++		return -EINVAL;
++	}
++
++	ofs = from;
++
++	*retlen = 0;
++	ret = read_one_chip(map, &private->chips,ofs,len,buf);
++
++	if (0 == ret) 
++		*retlen = len;
++	else 
++		ret = -EINVAL;
++
++	return ret;
++	
++}
++
++int 
++spi_flash_write(struct mtd_info *mtd, loff_t to , size_t len,
++                                       size_t *retlen, const u_char *buf)
++{
++
++	struct map_info *map = mtd->priv;
++	struct spi_flash_private *private = map->fldrv_priv;
++
++	if (to > mtd->size) 
++	{
++		printk (KERN_ERR "write address > size of spi flash\n");
++		return -EINVAL;
++	}
++
++	if ((len + to) > mtd->size) 
++	{
++		printk (KERN_ERR "write address + size > size of spi flash\n");
++		return -EINVAL;
++	}
++
++	*retlen = 0;
++	if (!len) 
++		return 0;
++
++	if (0 == write_one_chip(map, &private->chips, to, len, buf)) 
++	{
++		*retlen = len;
++		return 0;			
++	}
++
++	return -EINVAL;
++}
++
++
++int 
++spi_flash_erase(struct mtd_info *mtd, struct erase_info *instr)
++{
++	struct map_info *map = mtd->priv;
++	struct spi_flash_private *private = map->fldrv_priv;
++	unsigned long adr, len;
++	int ret = 0;
++	int i;
++	int first;
++	struct mtd_erase_region_info *regions = mtd->eraseregions;
++
++	if (instr->addr > mtd->size) 
++		return -EINVAL;
++
++	if ((instr->len + instr->addr) > mtd->size) 
++		return -EINVAL;
++
++	/* Check that both start and end of the requested erase are
++	 * aligned with the erasesize at the appropriate addresses.
++	 */
++
++	i = 0;
++
++        /* Skip all erase regions which are ended before the start of
++           the requested erase. Actually, to save on the calculations,
++           we skip to the first erase region which starts after the
++           start of the requested erase, and then go back one.
++        */
++        while ((i < mtd->numeraseregions) &&
++	       (instr->addr >= regions[i].offset)) 
++	{
++               i++;
++	}
++        i--;
++
++	/* OK, now i is pointing at the erase region in which this
++	 * erase request starts. Check the start of the requested
++	 * erase range is aligned with the erase size which is in
++	 * effect here.
++	 */
++	if (instr->addr & (regions[i].erasesize-1)) 
++		return -EINVAL;
++
++	/* Remember the erase region we start on. */
++	first = i;
++
++	/* Next, check that the end of the requested erase is aligned
++	 * with the erase region at that address.
++	 */
++
++	while ((i < mtd->numeraseregions) &&
++	       ((instr->addr + instr->len) >= regions[i].offset)) 
++	{
++                i++;
++	}
++
++	/* As before, drop back one to point at the region in which
++	 * the address actually falls.
++	 */
++	i--;
++
++	if ((instr->addr + instr->len) & (regions[i].erasesize-1)) 
++                return -EINVAL;
++	
++
++	adr = instr->addr;
++	len = instr->len;
++	i = first;
++
++	while (len) 
++	{
++		ret = erase_one_block(map, &private->chips, adr);
++
++		if (ret) 
++			return ret;
++
++		adr += regions[i].erasesize;
++		len -= regions[i].erasesize;
++	}
++
++	instr->state = MTD_ERASE_DONE;
++	mtd_erase_callback(instr);
++
++	return 0;
++}
+diff --git a/drivers/mtd/spichips/spiflash.h b/drivers/mtd/spichips/spiflash.h
+new file mode 100644
+index 0000000..2ec2eb4
+--- /dev/null
++++ b/drivers/mtd/spichips/spiflash.h
+@@ -0,0 +1,178 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#ifndef __LINUX_SPI_H__
++#define __LINUX_SPI_H__
++
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/types.h>
++#include <linux/kernel.h>
++#include <linux/sched.h>
++#include <linux/errno.h>
++#include <linux/init.h>
++#include <linux/slab.h>
++#include <linux/list.h>
++#include <linux/string.h>
++#include <linux/spinlock.h>
++#include <linux/device.h>
++#include <linux/interrupt.h>
++#include <linux/mtd/mtd.h>
++#include <linux/mtd/map.h>
++#include <linux/mtd/partitions.h>
++#include <linux/mtd/flashchip.h>
++#include <linux/dma-mapping.h>
++#include <linux/wait.h>
++#include <linux/delay.h>
++#include <asm/delay.h>
++#include <linux/semaphore.h>
++#define CFG_FLASH_SPI_DRIVER 1   /* Need for compile the modules */
++/*---------------------------------------------------------------------------
++ The folllowing should match exactly with its uboot counterpart spiflash.h
++----------------------------------------------------------------------------*/
++
++#define DEVICE_TYPE_X8	(8 / 8)
++#define DEVICE_TYPE_X16	(16 / 8)
++#define DEVICE_TYPE_X32	(32 / 8)
++
++#define SPI_READ_PAGE_SIZE (4*1024)			/* 4K page size */
++#define SPI_WRITE_PAGE_SIZE  256
++
++#define MAX_ERASE_REGIONS    4	
++
++struct spi_flash_info 
++{
++	const char *name;
++	const __u8  mfr_id;
++	const __u16 dev_id;
++	const __u32 operationmode;	
++	const uint64_t size;
++	const unsigned int max_clock;
++	const int numeraseregions;
++	const __u8 address32;
++	const struct mtd_erase_region_info regions[MAX_ERASE_REGIONS];
++};
++
++typedef enum spidir 
++{
++	SPI_NONE = 0,
++	SPI_READ = 1,
++	SPI_WRITE = 2
++} SPI_DIR;
++
++struct spi_ctrl_driver 
++{
++	struct module *module;
++	struct semaphore lock;
++	char *name;
++	struct list_head list;
++
++	/* Supports operation mode */
++	int operation_mode_mask;
++
++	/* Supports fast read at higher frequency */
++	int  fast_read;		
++
++	/* Supports fast write at higher frequency */
++	int  fast_write;
++
++	/* Max datasize to be used to read type functions in spi_transfer*/
++	int  max_read;		
++
++	/* spi_transfer can be used for all type of spi access */
++	int  (*spi_transfer)(int bank,unsigned char *cmd,int cmdlen, SPI_DIR dir, 
++				unsigned char *data, unsigned long datalen);
++
++	/* spi_burst_read is not NULL, if the ctrl supports read large data continuosly */
++	int  (*spi_burst_read)(int bank,unsigned char *cmd,int cmdlen, SPI_DIR dir, 
++				unsigned char *data, unsigned long  datalen);
++
++	int (*spi_configure_clock)(int bank, unsigned int clock);
++	
++#ifdef __UBOOT__   
++	int  (*spi_init)(void);
++#endif
++};
++
++struct spi_chip_driver 
++{
++	struct module *module;
++	struct semaphore lock;
++	char *name;
++	struct list_head list;
++	int (*probe)(int bank,struct spi_ctrl_driver *ctlr_drv, struct spi_flash_info *chip_info);
++	void (*unlock_sector)   (struct map_info *map, unsigned long sect_addr,int unlock);
++	int  (*is_sector_locked)(struct map_info *map, unsigned long sect_addr);
++	int  (*erase_sector)	(struct map_info *map, unsigned long sect_addr);
++	int  (*read_bytes)      (struct map_info *map, loff_t addr, size_t bytes, unsigned char *buf);
++	int  (*write_bytes)     (struct map_info *map, loff_t addr, size_t bytes, const unsigned char *buf);
++	void (*sync)		(struct map_info *map);
++	int  (*suspend)		(struct map_info *map);
++	void (*resume)		(struct map_info *map);
++};
++
++struct spi_flash_private 
++{
++	int device_type;
++	int interleave;
++	int numchips;
++	unsigned long chipshift;
++	__u8 address32;
++	struct flchip chips;
++	struct spi_chip_driver *chip_drv;
++	struct spi_ctrl_driver *ctrl_drv;
++};
++
++/* SPI Core Functions to register,access chip and controller drivers */
++struct spi_chip_driver *get_spi_chip_driver_by_index (int index);
++struct spi_chip_driver *get_spi_chip_driver_by_name (const char *name);
++struct spi_ctrl_driver *get_spi_ctrl_driver_by_index (int index);
++struct spi_ctrl_driver *get_spi_ctrl_driver_by_name (const char *name);
++void register_spi_chip_driver(struct spi_chip_driver *drv);
++void unregister_spi_chip_driver(struct spi_chip_driver *drv);
++void register_spi_ctrl_driver(struct spi_ctrl_driver *drv);
++void unregister_spi_ctrl_driver(struct spi_ctrl_driver *drv);
++
++/* Functions registered to MTD  for accessing the chips */
++int  spi_flash_read(struct mtd_info *, loff_t, size_t, size_t *, u_char *);
++int  spi_flash_write(struct mtd_info *, loff_t, size_t, size_t *,const u_char *);
++int  spi_flash_erase(struct mtd_info *, struct erase_info *);
++void spi_flash_sync(struct mtd_info *);
++int  spi_flash_suspend(struct mtd_info *);
++void spi_flash_resume(struct mtd_info *);
++int  spi_flash_unlock(struct mtd_info *mtd, loff_t ofs, uint64_t len);
++int  spi_flash_lock(struct mtd_info *mtd, loff_t ofs, uint64_t len);
++
++/* Generic spi funtions which can be used by any spi device (if uses generic algo) */
++int spi_generic_write_enable(int bank,struct spi_ctrl_driver *ctrl_drv);
++int spi_generic_read_enable(int bank,struct spi_ctrl_driver *ctrl_drv);
++int spi_generic_read_status(int bank,struct spi_ctrl_driver *ctrl_drv,unsigned char *status);
++int spi_generic_write_status(int bank,struct spi_ctrl_driver *ctrl_drv, unsigned char status);
++int spi_generic_erase(struct map_info *map, unsigned long sect_addr);
++int spi_generic_read(struct map_info *map, loff_t addr, size_t bytes, unsigned char *buff);
++int spi_generic_write(struct map_info *map, loff_t addr, size_t bytes, const unsigned char *buff);
++int spi_generic_probe(int bank, struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info,
++			char *spi_name,struct spi_flash_info *spi_list, int spi_list_len);
++
++#ifdef CONFIG_SPX_FEATURE_GLOBAL_BKUP_FLASH_BANKS
++#define MAX_SPI_BANKS	(CONFIG_SPX_FEATURE_GLOBAL_FLASH_BANKS + CONFIG_SPX_FEATURE_GLOBAL_BKUP_FLASH_BANKS)
++#else
++#define MAX_SPI_BANKS	CONFIG_SPX_FEATURE_GLOBAL_FLASH_BANKS
++#endif
++
++#endif
+diff --git a/drivers/mtd/spichips/spimtd.c b/drivers/mtd/spichips/spimtd.c
+new file mode 100644
+index 0000000..3c3a3c0
+--- /dev/null
++++ b/drivers/mtd/spichips/spimtd.c
+@@ -0,0 +1,241 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#include "spiflash.h"
++
++static struct mtd_info * spi_flash_probe(struct map_info *map);
++static void spi_flash_destroy(struct mtd_info *mtd);
++
++static struct mtd_chip_driver spi_flash_chipdrv = 
++{
++	.probe = spi_flash_probe,
++	.destroy = spi_flash_destroy,
++	.name = "spi_probe",
++	.module = THIS_MODULE
++};
++
++unsigned long ractrends_spiflash_flash_id[MAX_SPI_BANKS];
++unsigned long ractrends_spiflash_flash_size[MAX_SPI_BANKS];
++
++/*------------------------------------------------------------------------------*/
++/*                               Probe Function       			                */
++/*------------------------------------------------------------------------------*/
++static
++int
++probe_spi_chips(struct map_info *map,struct spi_flash_private *private,
++							struct spi_flash_info *spi_info)
++{
++	int bank = map->map_priv_1;
++	int req = 0;
++	int ctrl,chip;
++	int gotindex;
++	struct spi_chip_driver *chip_drv;
++	struct spi_ctrl_driver *ctrl_drv;
++	
++	gotindex=0;
++
++	/* For Every Controller driver */
++	ctrl = 0;
++	ctrl_drv = get_spi_ctrl_driver_by_index(ctrl);
++	while (ctrl_drv != NULL)
++	{
++		/* For Every Chip driver */
++		chip = 0;
++		chip_drv = get_spi_chip_driver_by_index(chip);
++		while (chip_drv != NULL)
++		{	
++			/* Probe for the chip on the controller */
++			if (chip_drv->probe(bank,ctrl_drv,spi_info) == 0)
++			{
++				/* If success, check if it is the requested index */
++				if (req == gotindex)
++				{
++					private->chip_drv = chip_drv;
++					private->ctrl_drv = ctrl_drv;
++					return 0;
++				}
++				gotindex++;
++			}
++			/* Try Next chip */
++			chip++;
++			chip_drv = get_spi_chip_driver_by_index(chip);
++		}
++		/* Try next controller */
++		ctrl++;
++		ctrl_drv = get_spi_ctrl_driver_by_index(ctrl);
++	}
++	return -1;
++}
++	
++static int configure_spi_clock(struct spi_ctrl_driver *ctrl_drv, int bank, unsigned int clock)
++{
++	if (ctrl_drv->spi_configure_clock == NULL)
++		return 0;
++	
++	return ctrl_drv->spi_configure_clock(bank, clock);
++}
++
++/*--------------------------------------------------------------------------------------*/
++/*                               Interfaces to MTD Module                               */
++/*--------------------------------------------------------------------------------------*/
++static struct mtd_info *
++spi_flash_probe(struct map_info *map)
++{
++	struct mtd_info *mtd;
++	struct spi_flash_private *private;
++
++	struct spi_flash_info spi_info;
++	struct flchip chips;
++	int j,i;
++
++
++	private = kmalloc(sizeof(*private) + sizeof(struct flchip) , GFP_KERNEL);
++	if (!private) 
++	{
++		printk(KERN_WARNING
++		       "%s: kmalloc failed for private structure\n", map->name);
++		return NULL;
++	}
++	memset(private,0,sizeof(*private) + (sizeof(struct flchip)));
++
++	mtd = (struct mtd_info*)kmalloc(sizeof(*mtd), GFP_KERNEL);
++	if (!mtd) 
++	{
++		printk(KERN_WARNING
++		       "%s: kmalloc failed for info structure\n", map->name);
++		return NULL;
++	}
++	memset(mtd, 0, sizeof(*mtd));
++
++	mtd->priv = map;
++
++	memset(&spi_info, 0, sizeof(spi_info));
++	if (probe_spi_chips(map,private,&spi_info) == -1)
++	{
++		printk(KERN_WARNING
++		       "%s: No spi compatible flash device found\n",
++		       map->name);
++		map->fldrv_priv = NULL;
++		kfree(mtd);
++		kfree(private);
++		return NULL;
++	}
++
++	/* Fill flash ID and size in public array */
++	ractrends_spiflash_flash_id[map->map_priv_1] = ((spi_info.mfr_id << 16) | spi_info.dev_id);
++	ractrends_spiflash_flash_size[map->map_priv_1] = spi_info.size;
++
++	configure_spi_clock(private->ctrl_drv, map->map_priv_1, spi_info.max_clock);
++
++	chips.start = 0;
++	chips.state = FL_READY;
++
++
++	/* Fill in the mtd  structures */
++	mtd->size = spi_info.size;
++	mtd->numeraseregions = spi_info.numeraseregions;
++
++	/* Allocate memory for erase regions */
++	mtd->eraseregions = kmalloc(sizeof(struct mtd_erase_region_info) *
++				    mtd->numeraseregions, GFP_KERNEL);
++	if (!mtd->eraseregions) 
++	{
++		printk(KERN_WARNING "%s: Failed to allocate "
++		       "memory for MTD erase region info\n", map->name);
++		kfree(mtd);
++		kfree(private);
++		map->fldrv_priv = NULL;
++		return NULL;
++	}
++
++	/* Fill in the mtd erase structures */
++	for (j = 0; j < spi_info.numeraseregions; j++) 
++	{
++		mtd->eraseregions[j].offset = spi_info.regions[j].offset;
++		mtd->eraseregions[j].erasesize = spi_info.regions[j].erasesize;
++		mtd->eraseregions[j].numblocks = spi_info.regions[j].numblocks;
++		if (mtd->erasesize <  mtd->eraseregions[j].erasesize) 
++			mtd->erasesize = mtd->eraseregions[j].erasesize;
++	}
++
++
++	/* Fill in the remaining mtd structure */
++	mtd->type = MTD_NORFLASH;
++	mtd->flags = MTD_CAP_NORFLASH;
++	mtd->name = map->name;
++	mtd->_erase = spi_flash_erase;
++	mtd->_read = spi_flash_read;
++	mtd->_write = spi_flash_write;
++	mtd->_sync = spi_flash_sync;
++	mtd->_suspend = spi_flash_suspend;
++	mtd->_resume = spi_flash_resume;
++	mtd->_lock = spi_flash_lock;
++	mtd->_unlock = spi_flash_unlock;
++	mtd->writesize = 1;
++
++	/* Fill in the private structure */
++	private->numchips = 1;
++	private->device_type = DEVICE_TYPE_X8;
++	private->interleave = 1;
++	private->address32 = spi_info.address32;
++	memcpy(&private->chips, &chips,sizeof(struct flchip) * private->numchips);
++	for (i = 0; i < private->numchips; i++) 
++	{
++		init_waitqueue_head(&private->chips.wq);
++		mutex_init(&private->chips.mutex);
++	}
++
++	/* Fill in the map structure */
++	map->fldrv_priv = private;
++	map->bankwidth = 1; 
++	map->fldrv = &spi_flash_chipdrv;
++	__module_get(THIS_MODULE);
++
++	return mtd;
++}
++
++
++static void 
++spi_flash_destroy(struct mtd_info *mtd)
++{
++	struct map_info *map = mtd->priv;
++	struct spi_flash_private *private = map->fldrv_priv;
++	kfree(private);
++}
++
++
++int __init 
++spi_flash_init(void)
++{
++	register_mtd_chip_driver(&spi_flash_chipdrv);
++	return 0;
++}
++
++void __exit 
++spi_flash_exit(void)
++{
++	unregister_mtd_chip_driver(&spi_flash_chipdrv);
++}
++
++module_init(spi_flash_init);
++module_exit(spi_flash_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("Core SPI with MTD Interface");
++
+diff --git a/drivers/mtd/spichips/spireg.c b/drivers/mtd/spichips/spireg.c
+new file mode 100644
+index 0000000..09aaa51
+--- /dev/null
++++ b/drivers/mtd/spichips/spireg.c
+@@ -0,0 +1,180 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++DEFINE_SPINLOCK(spi_chip_drvs_lock);
++LIST_HEAD(spi_chip_drvs_list);
++DEFINE_SPINLOCK(spi_ctrl_drvs_lock);
++LIST_HEAD(spi_ctrl_drvs_list);
++
++void 
++register_spi_chip_driver(struct spi_chip_driver *drv)
++{
++	spin_lock(&spi_chip_drvs_lock);
++	list_add(&drv->list, &spi_chip_drvs_list);
++	spin_unlock(&spi_chip_drvs_lock);
++}
++
++void 
++unregister_spi_chip_driver(struct spi_chip_driver *drv)
++{
++	spin_lock(&spi_chip_drvs_lock);
++	list_del(&drv->list);
++	spin_unlock(&spi_chip_drvs_lock);
++}
++
++void 
++register_spi_ctrl_driver(struct spi_ctrl_driver *drv)
++{
++	spin_lock(&spi_ctrl_drvs_lock);
++	list_add(&drv->list, &spi_ctrl_drvs_list);
++	spin_unlock(&spi_ctrl_drvs_lock);
++}
++
++void 
++unregister_spi_ctrl_driver(struct spi_ctrl_driver *drv)
++{
++	spin_lock(&spi_ctrl_drvs_lock);
++	list_del(&drv->list);
++	spin_unlock(&spi_ctrl_drvs_lock);
++}
++
++struct spi_chip_driver *
++get_spi_chip_driver_by_name (const char *name)
++{
++	struct list_head *pos;
++	struct spi_chip_driver *ret = NULL, *this;
++
++	spin_lock(&spi_chip_drvs_lock);
++
++	list_for_each(pos, &spi_chip_drvs_list) {
++		this = list_entry(pos, typeof(*this), list);
++
++		if (!strcmp(this->name, name)) {
++			ret = this;
++			break;
++		}
++	}
++	if (ret && !try_module_get(ret->module))
++		ret = NULL;
++
++	spin_unlock(&spi_chip_drvs_lock);
++
++	return ret;
++}
++
++struct spi_chip_driver *
++get_spi_chip_driver_by_index (int index)
++{
++	struct list_head *pos;
++	struct spi_chip_driver *ret = NULL, *this;
++	int got;
++
++	spin_lock(&spi_chip_drvs_lock);
++	
++	got=0;
++	list_for_each(pos, &spi_chip_drvs_list) {
++		this = list_entry(pos, typeof(*this), list);
++
++		if (index == got) {
++			ret = this;
++			break;
++		}
++		got++;
++	}
++	if (ret && !try_module_get(ret->module))
++		ret = NULL;
++
++	spin_unlock(&spi_chip_drvs_lock);
++
++	return ret;
++}
++
++
++struct spi_ctrl_driver *
++get_spi_ctrl_driver_by_name (const char *name)
++{
++	struct list_head *pos;
++	struct spi_ctrl_driver *ret = NULL, *this;
++
++	spin_lock(&spi_ctrl_drvs_lock);
++
++	list_for_each(pos, &spi_ctrl_drvs_list) {
++		this = list_entry(pos, typeof(*this), list);
++
++		if (!strcmp(this->name, name)) {
++			ret = this;
++			break;
++		}
++	}
++	if (ret && !try_module_get(ret->module))
++		ret = NULL;
++
++	spin_unlock(&spi_ctrl_drvs_lock);
++
++	return ret;
++}
++
++struct spi_ctrl_driver *
++get_spi_ctrl_driver_by_index (int index)
++{
++	struct list_head *pos;
++	struct spi_ctrl_driver *ret = NULL, *this;
++	int got;
++
++	spin_lock(&spi_ctrl_drvs_lock);
++
++	got=0;
++	list_for_each(pos, &spi_ctrl_drvs_list) {
++		this = list_entry(pos, typeof(*this), list);
++
++		if (index == got) {
++			ret = this;
++			break;
++		}
++		got++;
++	}
++	if (ret && !try_module_get(ret->module))
++		ret = NULL;
++
++	spin_unlock(&spi_ctrl_drvs_lock);
++
++	return ret;
++}
++
++
++
++EXPORT_SYMBOL(get_spi_chip_driver_by_name);
++EXPORT_SYMBOL(get_spi_chip_driver_by_index);
++EXPORT_SYMBOL(get_spi_ctrl_driver_by_name);
++EXPORT_SYMBOL(get_spi_ctrl_driver_by_index);
++EXPORT_SYMBOL(register_spi_ctrl_driver);
++EXPORT_SYMBOL(unregister_spi_ctrl_driver);
++EXPORT_SYMBOL(register_spi_chip_driver);
++EXPORT_SYMBOL(unregister_spi_chip_driver);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("Core routines for (un)registering  spi chip and controller drivers");
++
++#endif
+diff --git a/drivers/mtd/spichips/winbond.c b/drivers/mtd/spichips/winbond.c
+new file mode 100644
+index 0000000..03b203c
+--- /dev/null
++++ b/drivers/mtd/spichips/winbond.c
+@@ -0,0 +1,98 @@
++/*
++ * Copyright (C) 2007 American Megatrends Inc
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#ifdef __UBOOT__	
++#include <common.h>
++#endif
++#include "spiflash.h"
++#ifdef	CFG_FLASH_SPI_DRIVER
++
++/* Name, ID1, ID2 , Size, Clock, Erase regions, address mode,{ Offset, Erase Size, Erase Block Count } */
++/* address mode: 0x00 -3 byte address
++			      0x01 - 4 byte address	
++			      0x02 - Low byte: 3 byte address, High byte: 4 byte address*/
++static struct spi_flash_info winbond_data [] = 
++{
++	/* Winbond 64 K Sectors */
++	{ "Winbond W25X64" , 0xEF, 0x1730, 0x00010007, 0x800000 , 75  * 1000000,  1, 0x00, {{ 0, 64  * 1024, 128 },} },
++	{ "Winbond W25Q32" , 0xEF, 0x1640, 0x0001000F, 0x400000 , 75  * 1000000 , 1, 0x00, {{ 0, 64  * 1024, 128 },} },
++	{ "Winbond W25Q64" , 0xEF, 0x1740, 0x0001000F, 0x800000 , 80  * 1000000,  1, 0x00, {{ 0, 64  * 1024, 128 },} },
++	{ "Winbond W25Q128", 0xEF, 0x1840, 0x0001000F, 0x1000000, 104 * 1000000,  1, 0x00, {{ 0, 64  * 1024, 256 },} },
++	{ "Winbond W25Q256", 0xEF, 0x1940, 0x0001000F, 0x2000000, 104 * 1000000,  1, 0x02, {{ 0, 64  * 1024, 512 },} },
++	{ "Winbond W25M512", 0xEF, 0x1971, 0x0001000f, 0x4000000, 104 * 1000000,  2, 0x06, {{ 0, 64  * 1024, 512 },{ 0x2000000, 64  * 1024, 512 },} },
++};
++
++static
++int 
++winbond_probe(int bank,struct spi_ctrl_driver *ctrl_drv, struct spi_flash_info *chip_info)
++{
++	int retval;
++	retval = spi_generic_probe(bank,ctrl_drv,chip_info,"winbond",
++						winbond_data,ARRAY_SIZE(winbond_data));	
++
++	if (retval == -1)
++		return retval;
++
++	/* UnProctect all sectors */
++ 	/* SRWD=0 (Bit 7)  BP0,BP1,BP2 = 0 (Bit 2,3,4) */
++	if (spi_generic_write_status(bank,ctrl_drv,0x0) < 0)
++		printk("winbond: Unable to Unprotect all sectors\n");
++
++	return retval;
++}
++
++struct spi_chip_driver winbond_driver =
++{
++	.name 		= "winbond",
++	.module 	= THIS_MODULE,
++	.probe	 	= winbond_probe,
++	.erase_sector 	= spi_generic_erase,
++	.read_bytes	= spi_generic_read,
++	.write_bytes	= spi_generic_write,
++};
++
++int 
++winbond_init(void)
++{
++	sema_init(&winbond_driver.lock, 1);
++#ifdef __UBOOT__	/* MIPS */
++	winbond_driver.probe	 		= winbond_probe;
++	winbond_driver.erase_sector 	= spi_generic_erase;
++	winbond_driver.read_bytes	= spi_generic_read;
++	winbond_driver.write_bytes	= spi_generic_write;
++#endif
++	register_spi_chip_driver(&winbond_driver);
++	return 0;
++}
++
++void 
++winbond_exit(void)
++{
++	sema_init(&winbond_driver.lock, 1);
++	unregister_spi_chip_driver(&winbond_driver);
++	return;
++}
++
++module_init(winbond_init);
++module_exit(winbond_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("American Megatrends Inc");
++MODULE_DESCRIPTION("MTD SPI driver for Winbond flash chips");
++
++#endif
+-- 
+1.9.1
+

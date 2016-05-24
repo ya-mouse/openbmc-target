@@ -1,0 +1,1433 @@
+From 37ab8133c1be73a5af825c5015e9c7c830597909 Mon Sep 17 00:00:00 2001
+From: "Anton D. Kachalov" <mouse@yandex-team.ru>
+Date: Tue, 24 May 2016 19:35:34 +0300
+Subject: [PATCH 03/14] Add fbdev/ast
+
+Signed-off-by: Anton D. Kachalov <mouse@yandex-team.ru>
+---
+ drivers/video/fbdev/Kconfig            |   9 +
+ drivers/video/fbdev/Makefile           |   1 +
+ drivers/video/fbdev/ast/Makefile       |   7 +
+ drivers/video/fbdev/ast/ast_fb.c       | 774 +++++++++++++++++++++++++++++++++
+ drivers/video/fbdev/ast/ast_fb.h       |  95 ++++
+ drivers/video/fbdev/ast/ast_fb_ioctl.h |  16 +
+ drivers/video/fbdev/ast/ast_fb_mode.c  | 379 ++++++++++++++++
+ drivers/video/fbdev/ast/ast_fb_mode.h  |  68 +++
+ 8 files changed, 1349 insertions(+)
+ create mode 100644 drivers/video/fbdev/ast/Makefile
+ create mode 100644 drivers/video/fbdev/ast/ast_fb.c
+ create mode 100644 drivers/video/fbdev/ast/ast_fb.h
+ create mode 100644 drivers/video/fbdev/ast/ast_fb_ioctl.h
+ create mode 100644 drivers/video/fbdev/ast/ast_fb_mode.c
+ create mode 100644 drivers/video/fbdev/ast/ast_fb_mode.h
+
+diff --git a/drivers/video/fbdev/Kconfig b/drivers/video/fbdev/Kconfig
+index a5f8837..d88c972 100644
+--- a/drivers/video/fbdev/Kconfig
++++ b/drivers/video/fbdev/Kconfig
+@@ -1545,6 +1545,15 @@ config FB_SIS_315
+ 	  (315/H/PRO, 55x, 650, 651, 740, 330, 661, 741, 760, 761) as well
+ 	  as XGI V3XT, V5, V8 and Z7.
+ 
++config FB_AST
++       bool "ASPEED AST graphics display controller support"
++       depends on FB && BASESOC_AST
++       select FB_CFB_FILLRECT
++       select FB_CFB_COPYAREA
++       select FB_CFB_IMAGEBLIT
++       help
++          Say Y here to support use of the AST graphics display controller.
++
+ config FB_VIA
+        tristate "VIA UniChrome (Pro) and Chrome9 display support"
+        depends on FB && PCI && X86
+diff --git a/drivers/video/fbdev/Makefile b/drivers/video/fbdev/Makefile
+index 1979aff..ac326cd 100644
+--- a/drivers/video/fbdev/Makefile
++++ b/drivers/video/fbdev/Makefile
+@@ -132,6 +132,7 @@ obj-$(CONFIG_FB_JZ4740)		  += jz4740_fb.o
+ obj-$(CONFIG_FB_PUV3_UNIGFX)      += fb-puv3.o
+ obj-$(CONFIG_FB_HYPERV)		  += hyperv_fb.o
+ obj-$(CONFIG_FB_OPENCORES)	  += ocfb.o
++obj-$(CONFIG_FB_AST)              += ast/
+ 
+ # Platform or fallback drivers go here
+ obj-$(CONFIG_FB_UVESA)            += uvesafb.o
+diff --git a/drivers/video/fbdev/ast/Makefile b/drivers/video/fbdev/ast/Makefile
+new file mode 100644
+index 0000000..13a4b9d
+--- /dev/null
++++ b/drivers/video/fbdev/ast/Makefile
+@@ -0,0 +1,7 @@
++#
++# Makefile for the AST frame buffer device driver
++#
++
++obj-$(CONFIG_FB_AST) += astfb.o
++
++astfb-objs := ast_fb.o ast_fb_mode.o
+diff --git a/drivers/video/fbdev/ast/ast_fb.c b/drivers/video/fbdev/ast/ast_fb.c
+new file mode 100644
+index 0000000..70ae6c7
+--- /dev/null
++++ b/drivers/video/fbdev/ast/ast_fb.c
+@@ -0,0 +1,774 @@
++/****************************************************************
++ ****************************************************************
++ **                                                            **
++ **    (C)Copyright 2006-2009, American Megatrends Inc.        **
++ **                                                            **
++ **            All Rights Reserved.                            **
++ **                                                            **
++ **        5555 Oakbrook Pkwy Suite 200, Norcross              **
++ **                                                            **
++ **        Georgia - 30093, USA. Phone-(770)-246-8600.         **
++ **                                                            **
++ ****************************************************************
++ ****************************************************************/
++
++/****************************************************************
++ *
++ * ast_fb.c
++ * ASPEED AST frame buffer driver
++ *
++ ****************************************************************/
++
++#include <linux/version.h>
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/kernel.h>
++//#include <linux/smp_lock.h>
++#include <linux/spinlock.h>
++#include <linux/errno.h>
++#include <linux/string.h>
++#include <linux/mm.h>
++#include <linux/tty.h>
++#include <linux/slab.h>
++#include <linux/fb.h>
++#include <linux/delay.h>
++#include <linux/selection.h>
++#include <linux/bigphysarea.h>
++#include <linux/ioport.h>
++#include <linux/init.h>
++#include <linux/vmalloc.h>
++#include <linux/vt_kern.h>
++#include <linux/capability.h>
++#include <linux/fs.h>
++#include <linux/types.h>
++#include <asm/uaccess.h>
++#include <asm/io.h>
++
++#ifdef CONFIG_MTRR
++#include <asm/mtrr.h>
++#endif
++
++#include <linux/platform_device.h>
++
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
++#include <mach/platform.h>
++#include <mach/hardware.h>
++#else
++#include <asm/arch/platform.h>
++#include <asm/arch/hardware.h>
++#endif
++
++#include "ast_fb.h"
++#include "ast_fb_mode.h"
++#include "ast_fb_ioctl.h"
++
++#define AST_FB_DRV_NAME "astfb"
++
++extern int ast_fb_set_mode(struct fb_var_screeninfo *var, struct astfb_info *dinfo);
++extern int ast_fb_get_mode_info(struct fb_var_screeninfo *var, struct astfb_info *dinfo, struct ast_fb_mode_info_t *mode_info);
++
++static int ypan = 0;
++
++static struct fb_var_screeninfo default_var = {
++	.xres            = 0,
++	.yres            = 0,
++	.xres_virtual    = 0,
++	.yres_virtual    = 0,
++	.xoffset         = 0,
++	.yoffset         = 0,
++	.bits_per_pixel  = 0,
++	.grayscale       = 0,
++	.red             = {0, 8, 0},
++	.green           = {0, 8, 0},
++	.blue            = {0, 8, 0},
++	.transp          = {0, 0, 0},
++	.nonstd          = 0,
++	.activate        = FB_ACTIVATE_NOW,
++	.height          = -1,
++	.width           = -1,
++	.accel_flags     = 0,
++	.pixclock        = 0,
++	.left_margin     = 0,
++	.right_margin    = 0,
++	.upper_margin    = 0,
++	.lower_margin    = 0,
++	.hsync_len       = 0,
++	.vsync_len       = 0,
++	.sync            = 0,
++	.vmode           = FB_VMODE_NONINTERLACED,
++};
++
++/*
++static struct fb_fix_screeninfo default_fix = {
++	.id	= "AST1000/2000",
++	.type	= FB_TYPE_PACKED_PIXELS,
++	.accel	= FB_ACCEL_NONE,
++};
++*/
++
++#define AST_SCU_LOCK_KEY				0x00
++#define AST_SCU_MISC_CTRL				0x2C
++
++#define AST_SCU_UNLOCK_MAGIC			0x1688A8A8
++
++#define AST_SCU_MISC_CTRL_DVO_SRC		0x00040000 /* bit 18 */
++#define AST_SCU_MISC_CTRL_DAC_SRC_CRT	0x00010000
++#define AST_SCU_MISC_CTRL_DAC_SRC		0x00030000 /* bits[17:16] */
++#define AST_SCU_MISC_CTRL_VGA_REG		0x00000010 /* bit 4 */
++#define AST_SCU_MISC_CTRL_D2_PLL		0x00000008 /* bit 3 */
++
++int astfb_init_hw(struct device *dev, struct astfb_info *dinfo)
++{
++	uint32_t reg;
++
++	iowrite32(AST_SCU_UNLOCK_MAGIC, (void * __iomem)(AST_SCU_VA_BASE + AST_SCU_LOCK_KEY)); /* unlock SCU */
++
++	reg = ioread32((void * __iomem)(AST_SCU_VA_BASE + AST_SCU_MISC_CTRL));
++	reg &= ~(AST_SCU_MISC_CTRL_DAC_SRC | AST_SCU_MISC_CTRL_VGA_REG | AST_SCU_MISC_CTRL_D2_PLL); /* enable D2 PLL */
++	reg |= (AST_SCU_MISC_CTRL_DAC_SRC_CRT | AST_SCU_MISC_CTRL_DVO_SRC); /* set source to Graphics CRT */
++	iowrite32(reg, (void * __iomem)(AST_SCU_VA_BASE + AST_SCU_MISC_CTRL));
++
++	/* enable clock of Graphics Display controller */
++	reg = ioread32((void * __iomem)(SCU_CLK_STOP_REG));
++	reg &= ~(0x00000400);
++	iowrite32(reg, (void * __iomem)(SCU_CLK_STOP_REG));
++
++	udelay(10);
++
++	/* reset Graphics Display controller */
++	reg = ioread32((void * __iomem)(SCU_SYS_RESET_REG));
++	reg &= ~(0x00002000);
++	iowrite32(reg, (void * __iomem)(SCU_SYS_RESET_REG));
++
++	/* reset 2D engine */
++	reg = ioread32((void * __iomem)(SCU_SYS_RESET_REG));
++	reg &= ~(0x00000080);
++	iowrite32(reg, (void * __iomem)(SCU_SYS_RESET_REG));
++
++	iowrite32(0, (void * __iomem)(AST_SCU_VA_BASE + AST_SCU_LOCK_KEY)); /* lock SCU */
++
++	return 0;
++}
++
++int astfb_crtc_to_var(struct fb_var_screeninfo *var, struct astfb_info *dinfo)
++{
++	/* crtc */
++	var->xoffset = var->yoffset = 0;
++
++	/* palette */
++	switch (var->bits_per_pixel) {
++	case 8:
++		var->red.offset = var->green.offset = var->blue.offset = 0;
++		var->red.length = var->green.length = var->blue.length = 6;
++		break;
++	case 16:
++		var->red.offset = 11;
++		var->red.length = 5;
++		var->green.offset = 5;
++		var->green.length = 6;
++		var->blue.offset = 0;
++		var->blue.length = 5;
++		var->transp.offset = 0;
++		var->transp.length = 0;
++		break;
++	case 32:
++		var->red.offset = 16;
++		var->red.length = 8;
++		var->green.offset = 8;
++		var->green.length = 8;
++		var->blue.offset = 0;
++		var->blue.length = 8;
++		var->transp.offset = 24;
++		var->transp.length = 8;
++		break;
++	}
++
++	var->red.msb_right = 0;
++	var->green.msb_right = 0;
++	var->blue.msb_right = 0;
++	var->transp.offset = 0;
++	var->transp.length = 0;
++	var->transp.msb_right = 0;
++
++	return 0;
++}
++
++/*****************************************************************************/
++
++void ast_fd_wait_2d_engine_idle(struct astfb_info *dinfo)
++{
++	uint32_t reg;
++	uint32_t reg2;
++	uint32_t check_setting;
++	
++	check_setting = (dinfo->use_2d_engine) ? 0x80000000 : 0x10000000;
++
++	/* Chk if disable 2D */
++	reg = ioread32(dinfo->io_2d + 0x40);
++	if (!(reg & 0x80000000)) {
++		return;
++	}
++
++	do {
++		reg  = ioread32(dinfo->io_2d + 0x4C) & 0xFFFC0000;
++		reg2 = ioread32(dinfo->io_2d + 0x4C) & 0xFFFC0000;
++		reg2 = ioread32(dinfo->io_2d + 0x4C) & 0xFFFC0000;
++		reg2 = ioread32(dinfo->io_2d + 0x4C) & 0xFFFC0000;
++		reg2 = ioread32(dinfo->io_2d + 0x4C) & 0xFFFC0000;
++		reg2 = ioread32(dinfo->io_2d + 0x4C) & 0xFFFC0000;
++	} while ((reg & check_setting) || (reg != reg2));
++}
++
++int astfb_enable_2d_cmd_q(struct astfb_info *dinfo)
++{
++	uint32_t ulVMCmdQBasePort = 0;
++
++	ast_fd_wait_2d_engine_idle(dinfo);
++
++	if (dinfo->use_2d_engine) { /* command */
++		ulVMCmdQBasePort = (dinfo->frame_buf_phys + dinfo->cmd_q_offset) >> 3;
++
++		/* set CMDQ Threshold */
++		ulVMCmdQBasePort |= 0xF0000000;
++	
++		/* set CMDQ Size */
++		switch (dinfo->cmd_q_sz) {
++		case SZ_256K:
++			ulVMCmdQBasePort |= 0x00000000;
++			break;
++		case SZ_512K:
++			ulVMCmdQBasePort |= 0x04000000;
++			break;
++		case SZ_1M:
++			ulVMCmdQBasePort |= 0x08000000;
++			break;
++		case SZ_2M:
++			ulVMCmdQBasePort |= 0x0C000000;
++			break;
++		default:
++			printk(KERN_WARNING "Unsupported command Q size\n");
++			return 0;
++		}
++	} else { /* memory-mapped */
++		/* set CMDQ Threshold */
++		ulVMCmdQBasePort |= 0xF0000000;
++		ulVMCmdQBasePort |= 0x02000000; /* MMIO mode */
++    }
++
++	iowrite32(ulVMCmdQBasePort, dinfo->io_2d + 0x44);
++	return 0;
++}
++
++int ast_fb_enable_2d_engine(struct astfb_info *dinfo)
++{
++	iowrite32(0x80000000, dinfo->io_2d + 0x40);
++
++	astfb_enable_2d_cmd_q(dinfo);
++
++	return 0;
++}
++
++void ast_fb_disable_2d_engine(struct astfb_info *dinfo)
++{
++	iowrite32(0x00000000, dinfo->io_2d + 0x40);
++
++	ast_fd_wait_2d_engine_idle(dinfo);
++}
++
++/*****************************************************************************/
++
++static int astfb_set_fix(struct fb_info *info)
++{
++	struct fb_fix_screeninfo *fix;
++	struct astfb_info *dinfo = GET_DINFO(info);
++
++	fix = &(info->fix);
++	memset(fix, 0, sizeof(struct fb_fix_screeninfo));
++	strcpy(fix->id, dinfo->name);
++	fix->smem_start = dinfo->frame_buf_phys;
++	fix->smem_len = dinfo->frame_buf_sz;
++	fix->type = FB_TYPE_PACKED_PIXELS;
++	fix->type_aux = 0;
++	fix->visual = (dinfo->bpp == 8) ? FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_TRUECOLOR;
++	fix->xpanstep = 0;
++	fix->ypanstep = ypan ? 1 : 0;
++	fix->ywrapstep = 0;
++	fix->line_length = dinfo->pitch;
++	fix->mmio_start = dinfo->ulMMIOPhys;
++	fix->mmio_len = dinfo->ulMMIOSize;
++	fix->accel = FB_ACCEL_NONE;
++
++	return 0;
++}
++
++static int astfb_blank(int blank, struct fb_info *info)
++{
++	struct astfb_info *dinfo = GET_DINFO(info);
++	uint32_t reg;
++
++	switch (blank) {
++	case 0: /* on */
++		reg = 0x00000000;
++		break;
++	case 1: /* blank */
++		reg = 0x00100000;
++		break;
++	case 2: /* no vsync */
++		reg = 0x00180000;
++		break;
++	case 3: /* no hsync */
++		reg = 0x00140000;
++		break;
++	case 4: /* off */
++		reg = 0x001c0000;
++		break;
++	default:
++		return 1;
++	}
++
++	iowrite32(reg, dinfo->io + AST_GRAPHICS_CTRL);
++
++	return 0;
++}
++
++static int astfb_pan_display(struct fb_var_screeninfo *var, struct fb_info* info)
++{
++	struct astfb_info *dinfo = GET_DINFO(info);
++	uint32_t base;
++	u32 xoffset, yoffset;
++	
++	xoffset = (var->xoffset + 3) & ~3; /* DW alignment */
++	yoffset = var->yoffset;
++
++	if ((xoffset + var->xres) > var->xres_virtual) {
++		return -EINVAL;
++	}
++
++	if ((yoffset + var->yres) > var->yres_virtual) {
++		return -EINVAL;
++	}
++	
++	info->var.xoffset = xoffset;
++	info->var.yoffset = yoffset;
++
++	base = (var->yoffset * var->xres_virtual) + var->xoffset;
++
++	/* calculate base bpp depth */
++	switch(var->bits_per_pixel) {
++	case 32:
++		break;
++	case 16:
++		base >>= 1;
++		break;
++	case 8:
++	default:
++		base >>= 2;
++		break;
++	}
++
++	/* set starting address of frame buffer */
++	iowrite32(dinfo->frame_buf_phys + base, dinfo->io + AST_GRAPHICS_START_ADDR);
++
++	return 0;
++}
++
++static int astfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
++{
++	struct astfb_info *dinfo = GET_DINFO(info);
++	struct astfb_dfbinfo dfbinfo;
++
++	switch(cmd) {
++	case ASTFB_GET_DFBINFO:
++		dfbinfo.ulFBSize = dinfo->frame_buf_sz;
++		dfbinfo.ulFBPhys = dinfo->frame_buf_phys;
++		dfbinfo.ulCMDQSize = dinfo->cmd_q_sz;
++		dfbinfo.ulCMDQOffset = dinfo->cmd_q_offset;
++		dfbinfo.ul2DMode = dinfo->use_2d_engine;
++		if (copy_to_user((void __user *)arg, &dfbinfo, sizeof(struct astfb_dfbinfo)))
++			return -EFAULT;
++		return 0;
++
++	default:
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++static int astfb_get_cmap_len(struct fb_var_screeninfo *var)
++{
++	return (var->bits_per_pixel == 8) ? 256 : 16;
++}
++
++static int astfb_open(struct fb_info *info, int user)
++{
++	return 0;
++}
++
++static int astfb_release(struct fb_info *info, int user)
++{
++	return 0;
++}
++
++static int astfb_setcolreg(unsigned regno, unsigned red, unsigned green, unsigned blue, unsigned transp, struct fb_info *info)
++{
++	if (regno >= astfb_get_cmap_len(&info->var))
++		return 1;
++
++	switch(info->var.bits_per_pixel) {
++	case 8:
++		return 1;
++		break;
++	case 16:
++		((u32 *) (info->pseudo_palette))[regno] = (red & 0xf800) | ((green & 0xfc00) >> 5) | ((blue & 0xf800) >> 11);
++		break;
++	case 32:
++		red >>= 8;
++		green >>= 8;
++		blue >>= 8;
++		((u32 *)(info->pseudo_palette))[regno] =
++				(red << 16) | (green << 8) | (blue);
++		break;
++	}
++
++	return 0;
++}
++
++static int astfb_set_par(struct fb_info *info)
++{
++	struct astfb_info *dinfo = GET_DINFO(info);
++
++	if (ast_fb_set_mode(&info->var, dinfo))
++	    return 1;
++
++	astfb_set_fix(info);
++	
++	return 0;
++}
++
++static int astfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
++{
++	struct astfb_info *dinfo = GET_DINFO(info);
++	struct ast_fb_mode_info_t mode_info;
++	
++	if (ast_fb_get_mode_info(var, dinfo, &mode_info)) {
++		//printk(KERN_ERR "astfb: check mode failed \n");
++		return 1;
++	}
++
++	/* Sanity check for offsets */
++	if (var->xoffset < 0)
++		var->xoffset = 0;
++	if (var->yoffset < 0)
++		var->yoffset = 0;
++
++	if (var->xres > var->xres_virtual)
++		var->xres_virtual = var->xres;
++
++	/* Truncate offsets to maximum if too high */
++	if (var->xoffset > var->xres_virtual - var->xres) {
++		var->xoffset = var->xres_virtual - var->xres - 1;
++	}
++
++	if (var->yoffset > var->yres_virtual - var->yres) {
++		var->yoffset = var->yres_virtual - var->yres - 1;
++	}
++
++	switch (var->bits_per_pixel) {
++	case 8:
++		var->red.offset = var->green.offset = var->blue.offset = 0;
++		var->red.length = var->green.length = var->blue.length = 6;
++		break;
++	case 16:
++		var->red.offset = 11;
++		var->red.length = 5;
++		var->green.offset = 5;
++		var->green.length = 6;
++		var->blue.offset = 0;
++		var->blue.length = 5;
++		var->transp.offset = 0;
++		var->transp.length = 0;
++		break;
++	case 32:
++		var->red.offset = 16;
++		var->red.length = 8;
++		var->green.offset = 8;
++		var->green.length = 8;
++		var->blue.offset = 0;
++		var->blue.length = 8;
++		var->transp.offset = 24;
++		var->transp.length = 8;
++		break;
++	}
++
++	/* Set everything else to 0 */
++	var->red.msb_right = 0;
++	var->green.msb_right = 0;
++	var->blue.msb_right = 0;
++	var->transp.offset = 0;
++	var->transp.length = 0;
++	var->transp.msb_right = 0;
++
++	return 0;
++}
++
++static struct fb_ops ast_fb_ops = {
++	.owner          = THIS_MODULE,
++	.fb_open        = astfb_open,
++	.fb_release     = astfb_release,
++	.fb_check_var   = astfb_check_var,
++	.fb_set_par     = astfb_set_par,
++	.fb_setcolreg   = astfb_setcolreg,
++	.fb_blank       = astfb_blank,
++	.fb_pan_display = astfb_pan_display,
++	.fb_fillrect    = cfb_fillrect,
++	.fb_copyarea    = cfb_copyarea,
++	.fb_imageblit   = cfb_imageblit,
++	.fb_ioctl       = astfb_ioctl
++};
++
++/*****************************************************************************/
++
++static int astfb_set_fbinfo(struct astfb_info *dinfo)
++{
++	struct fb_info *info;
++
++	info = dinfo->info;
++
++	info->flags = FBINFO_FLAG_DEFAULT;
++	info->fbops = &ast_fb_ops;
++	info->var = dinfo->var;
++	info->fix = dinfo->fix;
++	info->pseudo_palette = dinfo->pseudo_palette;
++	info->screen_base = dinfo->frame_buf;
++
++	/* update crtc to var */
++	if (astfb_check_var(&info->var, info)) {
++		printk(KERN_ERR "astfb: check default mode failed\n");
++		return 1;
++	}
++
++	if (ast_fb_set_mode(&info->var, dinfo)) {
++		printk(KERN_ERR "astfb: set default mode failed\n");
++		return 1;
++	}
++
++	astfb_set_fix(info);
++
++	return 0;
++}
++
++static int astfb_alloc_bigphysarea(struct astfb_info *dinfo)
++{
++	unsigned long addr;
++	unsigned long size;
++
++	dinfo->frame_buf_sz = AST_FRAME_BUF_SZ;
++
++	dinfo->frame_buf = bigphysarea_alloc_pages(dinfo->frame_buf_sz / PAGE_SIZE, 0, GFP_KERNEL);
++	if (dinfo->frame_buf == NULL) {
++		return -1;
++	}
++
++	addr = (unsigned long) dinfo->frame_buf;
++	size = dinfo->frame_buf_sz;
++	while (size > 0) {
++		SetPageReserved(virt_to_page(addr));
++		addr += PAGE_SIZE;
++		size -= PAGE_SIZE;
++	}
++
++	memset(dinfo->frame_buf, 0x00, dinfo->frame_buf_sz);
++	dinfo->frame_buf_phys = virt_to_phys(dinfo->frame_buf);
++
++	return 0;
++}
++
++static void cleanup(struct astfb_info *dinfo)
++{
++	if (!dinfo)
++		return;
++
++	#if Enable2D
++	ast_fb_disable_2d_engine(dinfo);
++	#endif
++
++	if (dinfo->frame_buf != NULL)
++		iounmap(dinfo->frame_buf);
++
++	if (dinfo->registered) {
++		unregister_framebuffer(dinfo->info);
++		framebuffer_release(dinfo->info);
++	}
++
++	dev_set_drvdata(dinfo->dev, NULL);
++}
++
++static int astfb_drv_probe(struct device *dev)
++{
++	struct fb_info *info;
++	struct astfb_info *dinfo;
++	int ret;
++
++	info = framebuffer_alloc(sizeof(struct astfb_info), dev);
++	if (!info) {
++		printk(KERN_ERR "Could not allocate memory for astfb_info.\n");
++		return -ENODEV;
++	}
++	
++	if (fb_alloc_cmap(&info->cmap, 256, 0) < 0) {
++		printk(KERN_ERR "Could not allocate cmap for astfb_info.\n");
++		framebuffer_release(info);
++		return -ENODEV;
++	}
++
++	dinfo = (struct astfb_info *) info->par;
++	memset(dinfo, 0, sizeof(struct astfb_info));
++	dinfo->info = info;
++	dinfo->dev = dev;
++	strcpy(dinfo->name, "astfb");
++	dev_set_drvdata(dev, (void *) dinfo);
++
++	/* frame buffer */
++	ret = astfb_alloc_bigphysarea(dinfo);
++	if (ret != 0) {
++		printk(KERN_WARNING "failed to allocate physical memory for frame buffer\n");
++		cleanup(dinfo);
++		return -ENOMEM;
++	}
++
++	/* I/O registers */
++	if (request_mem_region(AST_GRAPHICS_REG_BASE, AST_GRAPHICS_REG_SZ, AST_FB_DRV_NAME) == NULL) {
++		printk(KERN_WARNING "%s: request memory region failed\n", AST_FB_DRV_NAME);
++		cleanup(dinfo);
++		return -EBUSY;
++	}
++
++	dinfo->io = ioremap(AST_GRAPHICS_REG_BASE, AST_GRAPHICS_REG_SZ);
++	if (dinfo->io == NULL) {
++		printk(KERN_WARNING "%s: ioremap failed\n", AST_FB_DRV_NAME);
++		cleanup(dinfo);
++		return -ENOMEM;
++	}
++
++	/* I/O registers of 2D engine */
++	dinfo->ulMMIOSize = AST_2D_ENGINE_REG_SZ;
++	dinfo->ulMMIOPhys = AST_2D_ENGINE_REG_BASE;
++
++	if (request_mem_region(AST_2D_ENGINE_REG_BASE, AST_2D_ENGINE_REG_SZ, AST_FB_DRV_NAME) == NULL) {
++		printk(KERN_WARNING "%s: request memory region failed\n", AST_FB_DRV_NAME);
++		cleanup(dinfo);
++		return -EBUSY;
++	}
++
++	dinfo->io_2d = ioremap(AST_2D_ENGINE_REG_BASE, AST_2D_ENGINE_REG_SZ);
++	if (dinfo->io_2d == NULL) {
++		printk(KERN_WARNING "%s: ioremap failed\n", AST_FB_DRV_NAME);
++		cleanup(dinfo);
++		return -ENOMEM;
++	}
++
++	#if EnableCMDQ
++	dinfo->cmd_q_sz = AST_GRAPHICS_CMD_Q_SZ;
++	dinfo->cmd_q_offset = dinfo->frame_buf_sz - dinfo->cmd_q_sz;
++	dinfo->use_2d_engine = 1;
++	#else
++	dinfo->cmd_q_sz = 0;
++	dinfo->cmd_q_offset = 0;
++	dinfo->use_2d_engine = 0;
++	#endif
++
++	if (astfb_init_hw(dev, dinfo)) {
++		cleanup(dinfo);
++		return -ENODEV;
++	}
++
++	/* set fb interface */
++	memcpy(&dinfo->var, &default_var, sizeof(default_var));
++
++	/* set default var mode */
++	dinfo->var.xres = dinfo->var.xres_virtual = 1024;
++	dinfo->var.yres = dinfo->var.yres_virtual = 768;
++	dinfo->var.bits_per_pixel = 32;
++	dinfo->refreshrate = 60;
++
++	if (astfb_set_fbinfo(dinfo)) {
++		cleanup(dinfo);
++		return -ENODEV;
++	}
++
++	if (register_framebuffer(info) < 0) {
++		printk(KERN_ERR "Cannot register framebuffer.\n");
++		cleanup(dinfo);
++		return -ENODEV;
++	}
++
++	dinfo->registered = 1;
++
++	return 0;
++}
++
++static int astfb_drv_remove(struct device *dev)
++{
++	struct astfb_info *dinfo = dev_get_drvdata(dev);
++
++	if (!dinfo)
++		return 0;
++
++	cleanup(dinfo);
++
++	return 0;
++}
++
++int astfb_drv_suspend(struct device *dev, pm_message_t state)
++{
++	/* TODO */
++	return 0;
++}
++
++int astfb_drv_resume(struct device *dev)
++{
++	/* TODO */
++	return 0;
++}
++
++static struct device_driver astfb_driver = {
++	.name = "astfb",
++	.bus = &platform_bus_type,
++	.probe = astfb_drv_probe,
++	.remove = astfb_drv_remove,
++	.suspend = astfb_drv_suspend,
++	.resume = astfb_drv_resume,
++};
++
++static struct platform_device astfb_device = {
++	.name = "astfb",
++};
++
++int __init astfb_init(void)
++{
++	int ret;
++
++	ret = driver_register(&astfb_driver);
++
++	if (!ret) {
++		ret = platform_device_register(&astfb_device);
++		if (ret)
++			driver_unregister(&astfb_driver);
++	}
++
++	return ret;
++}
++
++static void __exit astfb_exit(void)
++{
++	platform_device_unregister(&astfb_device);
++	driver_unregister(&astfb_driver);
++}
++
++module_init(astfb_init);
++module_exit(astfb_exit);
++
++MODULE_AUTHOR("American Megatrends Inc.");
++MODULE_DESCRIPTION("AST frame buffer driver");
++MODULE_LICENSE("American Megatrends Inc.");
+diff --git a/drivers/video/fbdev/ast/ast_fb.h b/drivers/video/fbdev/ast/ast_fb.h
+new file mode 100644
+index 0000000..f81deee
+--- /dev/null
++++ b/drivers/video/fbdev/ast/ast_fb.h
+@@ -0,0 +1,95 @@
++#ifndef __AST_FB_H__
++#define __AST_FB_H__
++
++#define Enable2D			0 /* Enable 2D Acceleration */
++#define EnableCMDQ			0 /* 0/1 : MMIO/CMDQ */
++
++#define GET_DINFO(info)		(struct astfb_info *)(info->par)
++#define GET_DISP(info, con)	((con) < 0) ? (info)->disp : &fb_display[con]
++
++#define AST_FRAME_BUF_SZ					0x00800000 /* 8 MB */
++#define AST_GRAPHICS_CMD_Q_SZ				0x00100000 /* 1 MB */
++
++#define AST_GRAPHICS_REG_BASE				0x1E6E6000
++#define AST_GRAPHICS_REG_SZ					SZ_4K
++#define AST_GRAPHICS_IRQ					25
++
++#define AST_2D_ENGINE_REG_BASE				0x1E760000
++#define AST_2D_ENGINE_REG_SZ				SZ_128K
++#define AST_2D_ENGINE_IRQ					29
++
++/* registers of graphics display controller */
++#define AST_GRAPHICS_CTRL					0x60
++#define AST_GRAPHICS_CTRL2					0x64
++#define AST_GRAPHICS_STS					0x68
++#define AST_GRAPHICS_PLL					0x6C
++#define AST_GRAPHICS_H_TOTAL_END			0x70
++#define AST_GRAPHICS_H_RETRACE				0x74
++#define AST_GRAPHICS_V_TOTAL_END			0x78
++#define AST_GRAPHICS_V_RETRACE				0x7C
++#define AST_GRAPHICS_START_ADDR				0x80
++#define AST_GRAPHICS_OFFSET					0x84
++#define AST_GRAPHICS_THRES					0x88
++
++/* bits of control register */
++#define AST_GRAPHICS_CTRL_ENABLE			0x00000001 /* bit 0 */
++#define AST_GRAPHICS_CTRL_FORMAT			0x00000380 /* bits[9:7] */
++#define AST_GRAPHICS_CTRL_H_SYNC_POLAR		0x00010000 /* bit 16 */
++#define AST_GRAPHICS_CTRL_V_SYNC_POLAR		0x00020000 /* bit 17 */
++#define AST_GRAPHICS_CTRL_H_SYNC_OFF		0x00040000 /* bit 18 */
++#define AST_GRAPHICS_CTRL_V_SYNC_OFF		0x00080000 /* bit 19 */
++
++#define AST_GRAPHICS_CTRL_FORMAT_RGB555			0x00000000
++#define AST_GRAPHICS_CTRL_FORMAT_XRGB8888		0x00000100
++#define AST_GRAPHICS_CTRL_FORMAT_YUV444_RGB		0x00000270
++#define AST_GRAPHICS_CTRL_FORMAT_YUV444_YUV		0x00000070
++
++/* bits of control register 2 */
++#define AST_GRAPHICS_CTRL2_DAC					0x00000001 /* bit 0 */
++#define AST_GRAPHICS_CTRL2_DVO					0x00000080 /* bit 7 */
++
++struct astfb_info {
++	/* fb info */
++	struct fb_info *info;
++	struct device *dev;
++
++	struct fb_var_screeninfo var;
++	struct fb_fix_screeninfo fix;
++	u32 pseudo_palette[17];
++	
++	/* driver registered */
++	int registered;
++	
++	/* chip info */
++	char name[16];
++
++	/* resource stuff */
++	unsigned long frame_buf_phys;
++	unsigned long frame_buf_sz;
++	void *frame_buf;
++
++	unsigned long ulMMIOPhys;
++	unsigned long ulMMIOSize;
++
++	void __iomem *io;
++	void __iomem *io_2d;
++
++	/* Options */
++
++	/* command queue */
++	unsigned long cmd_q_sz;
++	unsigned long cmd_q_offset;
++	int use_2d_engine;
++
++	/* mode stuff */
++	int xres;
++	int yres;
++	int xres_virtual;
++	int yres_virtual;
++	int bpp;
++	int pixclock;
++	int pitch;
++	int refreshrate;
++};
++
++#endif /* !__AST_FB_H__ */
+diff --git a/drivers/video/fbdev/ast/ast_fb_ioctl.h b/drivers/video/fbdev/ast/ast_fb_ioctl.h
+new file mode 100644
+index 0000000..a95b29e
+--- /dev/null
++++ b/drivers/video/fbdev/ast/ast_fb_ioctl.h
+@@ -0,0 +1,16 @@
++#ifndef __AST_FB_IOCTL_H__
++#define __AST_FB_IOCTL_H__
++
++struct astfb_dfbinfo {
++	unsigned long ulFBSize;
++	unsigned long ulFBPhys;
++
++	unsigned long ulCMDQSize;
++	unsigned long ulCMDQOffset;
++
++	unsigned long ul2DMode;
++};
++
++#define ASTFB_GET_DFBINFO	_IOR(0xF3,0x00,struct astfb_dfbinfo)
++
++#endif /* !__AST_FB_IOCTL_H__ */
+diff --git a/drivers/video/fbdev/ast/ast_fb_mode.c b/drivers/video/fbdev/ast/ast_fb_mode.c
+new file mode 100644
+index 0000000..bff865b
+--- /dev/null
++++ b/drivers/video/fbdev/ast/ast_fb_mode.c
+@@ -0,0 +1,379 @@
++/****************************************************************
++ ****************************************************************
++ **                                                            **
++ **    (C)Copyright 2006-2009, American Megatrends Inc.        **
++ **                                                            **
++ **            All Rights Reserved.                            **
++ **                                                            **
++ **        5555 Oakbrook Pkwy Suite 200, Norcross              **
++ **                                                            **
++ **        Georgia - 30093, USA. Phone-(770)-246-8600.         **
++ **                                                            **
++ ****************************************************************
++ ****************************************************************/
++
++#include <linux/version.h>
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/kernel.h>
++//#include <linux/smp_lock.h>
++#include <linux/spinlock.h>
++#include <linux/errno.h>
++#include <linux/string.h>
++#include <linux/mm.h>
++#include <linux/tty.h>
++#include <linux/slab.h>
++#include <linux/fb.h>
++#include <linux/selection.h>
++#include <linux/ioport.h>
++#include <linux/init.h>
++#include <linux/pci.h>
++#include <linux/vmalloc.h>
++#include <linux/capability.h>
++#include <linux/fs.h>
++#include <linux/types.h>
++#include <asm/uaccess.h>
++#include <asm/io.h>
++
++#ifdef CONFIG_MTRR
++#include <asm/mtrr.h>
++#endif
++
++#include <mach/platform.h>
++//#include <mach/memory.h>
++
++#include "ast_fb.h"
++#include "ast_fb_mode.h"
++
++struct ast_fb_mode_info_t mode_tab_640x480[] = {
++	{
++		800, 640, 8, 96, /* horizontal */
++		525, 480, 2, 2, /* vertical */
++		60, VCLK25_175, /* refresh rate and clock */
++		MODE_FLAG_SYNC_NN | MODE_FLAG_H_BORDER | MODE_FLAG_V_BORDER,
++	}, {
++		832, 640, 16, 40, /* horizontal */
++		520, 480, 1, 3, /* vertical */
++		72, VCLK31_5, /* refresh rate and clock */
++		MODE_FLAG_SYNC_NN | MODE_FLAG_H_BORDER | MODE_FLAG_V_BORDER,
++	}, {
++		840, 640, 16, 64, /* horizontal */
++		500, 480, 1, 3, /* vertical */
++		75, VCLK31_5, /* refresh rate and clock */
++		MODE_FLAG_SYNC_NN,
++	}, {
++		832, 640, 56, 56, /* horizontal */
++		509, 480, 1, 3, /* vertical */
++		85, VCLK36, /* refresh rate and clock */
++		MODE_FLAG_SYNC_NN,
++	}, { /* end */
++		0, 0, 0, 0,
++		0, 0, 0, 0,
++		-1, 0,
++		0
++	}
++};
++
++struct ast_fb_mode_info_t mode_tab_800x600[] = {
++	{
++		1024, 800, 24, 72, /* horizontal */
++		625, 600, 1, 2, /* vertical */
++		56, VCLK36, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, {
++		1056, 800, 40, 128, /* horizontal */
++		628, 600, 1, 4, /* vertical */
++		60, VCLK40, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, {
++		1040, 800, 56, 120, /* horizontal */
++		666, 600, 37, 6, /* vertical */
++		72, VCLK50, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, {
++		1056, 800, 16, 80, /* horizontal */
++		625, 600, 1, 3, /* vertical */
++		75, VCLK49_5, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, {
++		1048, 800, 32, 64, /* horizontal */
++		631, 600, 1, 3, /* vertical */
++		85, VCLK56_25, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, { /* end */
++		0, 0, 0, 0,
++		0, 0, 0, 0,
++		-1, 0,
++		0
++	}
++};
++
++struct ast_fb_mode_info_t mode_tab_1024x768[] = {
++	{
++		1344, 1024, 24, 136, /* horizontal */
++		806, 768, 3, 6, /* vertical */
++		60, VCLK65, /* refresh rate and clock */
++		MODE_FLAG_SYNC_NN,
++	}, {
++		1328, 1024, 24, 136, /* horizontal */
++		806, 768, 3, 6, /* vertical */
++		70, VCLK75, /* refresh rate and clock */
++		MODE_FLAG_SYNC_NN,
++	}, {
++		1312, 1024, 16, 96, /* horizontal */
++		800, 768, 1, 3, /* vertical */
++		75, VCLK78_75, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, {
++		1376, 1024, 48, 96, /* horizontal */
++		808, 768, 1, 3, /* vertical */
++		85, VCLK94_5, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, { /* end */
++		0, 0, 0, 0,
++		0, 0, 0, 0,
++		-1, 0,
++		0
++	}
++};
++
++struct ast_fb_mode_info_t mode_tab_1280x1024[] = {
++	{
++		1688, 1280, 48, 112, /* horizontal */
++		1066, 1024, 1, 3, /* vertical */
++		60, VCLK108, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP
++	}, {
++		1688, 1280, 16, 144, /* horizontal */
++		1066, 1024, 1, 3, /* vertical */
++		75, VCLK135, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP
++	}, {
++		1728, 1280, 64, 160, /* horizontal */
++		1072, 1024, 1, 3, /* vertical */
++		85, VCLK157_5, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP
++	}, { /* end */
++		0, 0, 0, 0,
++		0, 0, 0, 0,
++		-1, 0,
++		0
++	}
++};
++
++struct ast_fb_mode_info_t mode_tab_1600x1200[] = {
++	{
++		2160, 1600, 64, 192, /* horizontal */
++		1250, 1200, 1, 3, /* vertical */
++		60, VCLK162, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, { /* end */
++		0, 0, 0, 0,
++		0, 0, 0, 0,
++		-1, 0,
++		0
++	}
++};
++
++struct ast_fb_mode_info_t mode_tab_1920x1080[] = {
++	{
++		2200, 1920, 88, 44, /* horizontal */
++		1125, 1080, 4, 5, /* vertical */
++		60, VCLK148_5, /* refresh rate and clock */
++		MODE_FLAG_SYNC_PP,
++	}, { /* end */
++		0, 0, 0, 0,
++		0, 0, 0, 0,
++		-1, 0,
++		0
++	}
++};
++
++uint32_t ast_fb_clk_table[] = {
++    0x00046515, /* 00: VCLK25_175 */
++    0x00047255, /* 01: VCLK28_322 */
++    0x0004682a, /* 02: VCLK31_5 */
++    0x0004672a, /* 03: VCLK36 */
++    0x00046c50, /* 04: VCLK40 */
++    0x00046842, /* 05: VCLK49_5 */
++    0x00006c32, /* 06: VCLK50 */
++    0x00006a2f, /* 07: VCLK56_25 */
++    0x00006c41, /* 08: VCLK65 */
++    0x00006832, /* 09: VCLK75 */
++    0x0000672e, /* 10: VCLK78_75 */
++    0x0000683f, /* 11: VCLK94_5 */
++    0x00004824, /* 12: VCLK108 */
++    0x0000482d, /* 13: VCLK135 */
++    0x0000472e, /* 14: VCLK157_5 */
++    0x00004836, /* 15: VCLK162 */
++    0x00004b44, /* 16: VCLK148_5 */
++};
++
++extern int ast_fb_enable_2d_engine(struct astfb_info *dinfo);
++extern void ast_fb_disable_2d_engine(struct astfb_info *dinfo);
++
++int ast_fb_get_mode_info(struct fb_var_screeninfo *var, struct astfb_info *dinfo, struct ast_fb_mode_info_t *mode_info)
++{
++	struct ast_fb_mode_info_t *mode_walker;
++	uint32_t ulHT, ulVT;
++	uint32_t ulHBorder, ulVBorder;
++
++	ulHT = var->xres + var->left_margin + var->right_margin + var->hsync_len;
++	ulVT = var->yres + var->upper_margin + var->lower_margin + var->vsync_len;
++
++	switch (var->xres) {
++	case 640:
++		mode_walker = mode_tab_640x480;
++		break;
++	case 800:
++		mode_walker = mode_tab_800x600;
++		break;
++	case 1024:
++		mode_walker = mode_tab_1024x768;
++		break;
++	case 1280:
++		mode_walker = mode_tab_1280x1024;
++		break;
++	case 1600:
++		mode_walker = mode_tab_1600x1200;
++		break;
++	case 1920:
++		mode_walker = mode_tab_1920x1080;
++		break;
++	default:
++		return 1;
++	}
++
++	/* Get Proper Mode Index */
++	while (mode_walker->refresh_rate < dinfo->refreshrate) {
++		mode_walker++;
++		if (mode_walker->clk_tab_index == -1) {
++			printk("AST FB NO Match mode\n");
++			mode_walker--;
++			break;
++		}
++	}
++
++	memcpy(mode_info, mode_walker, sizeof(struct ast_fb_mode_info_t));
++
++	/* Update var info */
++	ulHBorder = (mode_info->flags & MODE_FLAG_H_BORDER) ? 1 : 0;
++	ulVBorder = (mode_info->flags & MODE_FLAG_V_BORDER) ? 1 : 0;
++
++	var->left_margin = ulHBorder ? (u32) (mode_info->horiz_front_porch + 8) : (u32) (mode_info->horiz_front_porch);
++	var->hsync_len = (u32) mode_info->horiz_sync;
++	var->right_margin = (u32) (mode_info->horiz_total - var->xres - var->left_margin - var->hsync_len);
++
++	var->upper_margin = ulVBorder ? (u32) (mode_info->verti_front_porch + 1) : (u32) (mode_info->verti_front_porch);
++	var->vsync_len = (u32) mode_info->verti_sync;
++	var->lower_margin = (u32) (mode_info->verti_total - var->yres - var->upper_margin - var->vsync_len);
++
++	/* update dinfo */
++	dinfo->xres = var->xres;
++	dinfo->yres = var->yres;
++	dinfo->xres_virtual = var->xres_virtual;
++	dinfo->yres_virtual = var->yres_virtual;
++	dinfo->bpp = var->bits_per_pixel;
++	dinfo->pitch = var->xres_virtual * ((dinfo->bpp + 1) / 8);
++	dinfo->pixclock = var->pixclock;
++
++	return 0;
++}
++
++void astfb_set_mode_reg(struct astfb_info *dinfo, struct ast_fb_mode_info_t *mode_info)
++{
++	uint32_t horiz_total;
++	uint32_t horiz_display_end;
++	uint32_t horiz_border_start;
++	uint32_t horiz_border_end;
++	uint32_t horiz_retrace_start;
++	uint32_t horiz_retrace_end;
++
++	uint32_t verti_total;
++	uint32_t verti_display_end;
++	uint32_t verti_border_start;
++	uint32_t verti_border_end;
++	uint32_t verti_retrace_start;
++	uint32_t verti_retrace_end;
++
++	horiz_total = mode_info->horiz_total;
++	horiz_display_end = mode_info->horiz_display_end;
++	horiz_border_start = (mode_info->flags & MODE_FLAG_H_BORDER) ? (horiz_display_end + 1) : horiz_display_end;
++	horiz_border_end = (mode_info->flags & MODE_FLAG_H_BORDER) ? (horiz_total - 1) : horiz_total;
++	horiz_retrace_start = horiz_border_start + mode_info->horiz_front_porch;
++	horiz_retrace_end = horiz_border_start + mode_info->horiz_front_porch + mode_info->horiz_sync;
++
++	verti_total = mode_info->verti_total;
++	verti_display_end = mode_info->verti_display_end;
++	verti_border_start = (mode_info->flags & MODE_FLAG_V_BORDER) ? (verti_display_end + 1) : verti_display_end;
++	verti_border_end = (mode_info->flags & MODE_FLAG_V_BORDER) ? (verti_total - 1) : verti_total;
++	verti_retrace_start = verti_border_start + mode_info->verti_front_porch;
++	verti_retrace_end = verti_border_start + mode_info->verti_front_porch + mode_info->verti_sync;
++
++	iowrite32(((horiz_display_end - 1) << 16) | (horiz_total - 1), dinfo->io + AST_GRAPHICS_H_TOTAL_END);
++	iowrite32(((horiz_retrace_end - 1) << 16) | (horiz_retrace_start - 1), dinfo->io + AST_GRAPHICS_H_RETRACE);
++	iowrite32(((verti_display_end - 1) << 16) | (verti_total - 1), dinfo->io + AST_GRAPHICS_V_TOTAL_END);
++	iowrite32(((verti_retrace_end - 1) << 16) | (verti_retrace_start - 1), dinfo->io + AST_GRAPHICS_V_RETRACE);
++}
++
++void astfb_set_offset_reg(struct astfb_info *dinfo, struct ast_fb_mode_info_t *mode_info)
++{
++	uint32_t offset, terminal_count;
++
++	offset = ((uint32_t) dinfo->xres * dinfo->bpp) >> 3; /* Unit: 8 bits */
++	terminal_count = ((uint32_t) dinfo->xres * dinfo->bpp + 63) >> 6; /* Unit: 64 bits, 63 is for alignment */
++
++	iowrite32((terminal_count << 16) | (offset), dinfo->io + AST_GRAPHICS_OFFSET);
++}
++
++void astfb_set_ctrl_reg(struct astfb_info *dinfo, struct ast_fb_mode_info_t *mode_info)
++{
++	uint32_t reg;
++
++	reg = AST_GRAPHICS_CTRL_ENABLE;
++
++	/* Mode Type Setting */
++	switch (dinfo->bpp) {
++	case 16:
++		reg |= AST_GRAPHICS_CTRL_FORMAT_RGB555;
++		break;
++	case 32:
++		reg |= AST_GRAPHICS_CTRL_FORMAT_XRGB8888;
++		break;
++	}
++
++	/* Polarity */
++	reg |= ((mode_info->flags & MODE_FLAG_SYNC_NN) << 16);
++
++	iowrite32(dinfo->frame_buf_phys, dinfo->io + AST_GRAPHICS_START_ADDR);
++	iowrite32(((uint32_t) CRT_HIGH_THRESHOLD_VALUE << 8) | (uint32_t) (CRT_LOW_THRESHOLD_VALUE), dinfo->io + AST_GRAPHICS_THRES);
++	iowrite32(AST_GRAPHICS_CTRL2_DAC | AST_GRAPHICS_CTRL2_DVO, dinfo->io + AST_GRAPHICS_CTRL2);
++	iowrite32(reg, dinfo->io + AST_GRAPHICS_CTRL);
++}
++
++int ast_fb_set_mode(struct fb_var_screeninfo *var, struct astfb_info *dinfo)
++{
++	struct ast_fb_mode_info_t mode_info;
++
++	if (ast_fb_get_mode_info(var, dinfo, &mode_info)) {
++		printk("AST FB invalid mode\n");
++		return -1;
++	}
++
++	/* pre set mode */
++	#if Enable2D
++	ast_fb_disable_2d_engine(dinfo);
++	#endif
++	
++	iowrite32(ast_fb_clk_table[mode_info.clk_tab_index], dinfo->io + AST_GRAPHICS_PLL);
++	astfb_set_mode_reg(dinfo, &mode_info);
++	astfb_set_offset_reg(dinfo, &mode_info);
++	astfb_set_ctrl_reg(dinfo, &mode_info);
++	
++	/* post set mode */
++	#if Enable2D
++	ast_fb_enable_2d_engine(dinfo);
++	#endif
++
++	return 0;
++}
+diff --git a/drivers/video/fbdev/ast/ast_fb_mode.h b/drivers/video/fbdev/ast/ast_fb_mode.h
+new file mode 100644
+index 0000000..9244bff
+--- /dev/null
++++ b/drivers/video/fbdev/ast/ast_fb_mode.h
+@@ -0,0 +1,68 @@
++#ifndef __AST_FB_MODE_H__
++#define __AST_FB_MODE_H__
++
++/* Mode Limitation */
++#define MAX_HResolution		1600
++#define MAX_VResolution		1200
++
++/* Default Seting */
++#define CRT_LOW_THRESHOLD_VALUE         0x40
++#define CRT_HIGH_THRESHOLD_VALUE        0x70
++
++/* Std. Table Index Definition */
++#define TextModeIndex 		0
++#define EGAModeIndex 		1
++#define VGAModeIndex 		2
++#define HiCModeIndex 		3
++#define TrueCModeIndex 		4
++
++/* DCLK Index */
++#define VCLK25_175			0
++#define VCLK28_322			1
++#define VCLK31_5			2
++#define VCLK36				3
++#define VCLK40				4
++#define VCLK49_5			5
++#define VCLK50				6
++#define VCLK56_25			7
++#define VCLK65				8
++#define VCLK75				9
++#define VCLK78_75			10
++#define VCLK94_5			11
++#define VCLK108				12
++#define VCLK135				13
++#define VCLK157_5			14
++#define VCLK162				15
++#define VCLK148_5			16
++
++/* Mode flags definition */
++#define MODE_FLAG_SYNC_PP       0x00000000
++#define MODE_FLAG_SYNC_PN       0x00000001
++#define MODE_FLAG_SYNC_NP       0x00000002
++#define MODE_FLAG_SYNC_NN       0x00000003
++#define MODE_FLAG_V_BORDER      0x00000004
++#define MODE_FLAG_H_BORDER      0x00000008
++
++/* DAC Definition */
++#define DAC_NUM_TEXT	64
++#define DAC_NUM_EGA		64
++#define DAC_NUM_VGA		256
++
++struct ast_fb_mode_info_t {
++	unsigned long horiz_total;
++	unsigned long horiz_display_end;
++	unsigned long horiz_front_porch;
++	unsigned long horiz_sync;
++
++	unsigned long verti_total;
++	unsigned long verti_display_end;
++	unsigned long verti_front_porch;
++	unsigned long verti_sync;
++
++	int refresh_rate;
++	int clk_tab_index;
++
++	unsigned int flags;
++};
++
++#endif /* !__AST_FB_MODE_H__ */
+-- 
+1.9.1
+

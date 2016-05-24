@@ -1,0 +1,105 @@
+From 769d2f0eb2ee1e252d9ff686e233f19a1a6644ee Mon Sep 17 00:00:00 2001
+From: "Anton D. Kachalov" <mouse@yandex-team.ru>
+Date: Tue, 24 May 2016 19:38:02 +0300
+Subject: [PATCH 08/14] Add AMI NAND default map
+
+Signed-off-by: Anton D. Kachalov <mouse@yandex-team.ru>
+---
+ drivers/mtd/nand/Kconfig  |  6 ++++++
+ drivers/mtd/nand/Makefile |  1 +
+ drivers/mtd/nand/amimap.c | 54 +++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 61 insertions(+)
+ create mode 100644 drivers/mtd/nand/amimap.c
+
+diff --git a/drivers/mtd/nand/Kconfig b/drivers/mtd/nand/Kconfig
+index dd10646..bfe7439 100644
+--- a/drivers/mtd/nand/Kconfig
++++ b/drivers/mtd/nand/Kconfig
+@@ -400,6 +400,12 @@ config MTD_NAND_BCM47XXNFLASH
+ 	  registered by bcma as platform devices. This enables driver for
+ 	  NAND flash memories. For now only BCM4706 is supported.
+ 
++config MTD_NAND_MAP_AMI
++	bool "Support for AMI Parition for NAND"
++	depends on MTD_NAND && MTD_PARTITIONS
++	help
++	  Select if you want AMI's method of NAND Paritioning
++
+ config MTD_NAND_PLATFORM
+ 	tristate "Support for generic platform NAND driver"
+ 	depends on HAS_IOMEM
+diff --git a/drivers/mtd/nand/Makefile b/drivers/mtd/nand/Makefile
+index 9c847e4..2dc2950 100644
+--- a/drivers/mtd/nand/Makefile
++++ b/drivers/mtd/nand/Makefile
+@@ -48,6 +48,7 @@ obj-$(CONFIG_MTD_NAND_MPC5121_NFC)	+= mpc5121_nfc.o
+ obj-$(CONFIG_MTD_NAND_RICOH)		+= r852.o
+ obj-$(CONFIG_MTD_NAND_JZ4740)		+= jz4740_nand.o
+ obj-$(CONFIG_MTD_NAND_GPMI_NAND)	+= gpmi-nand/
++obj-$(CONFIG_MTD_NAND_MAP_AMI)      += amimap.o
+ obj-$(CONFIG_MTD_NAND_XWAY)		+= xway_nand.o
+ obj-$(CONFIG_MTD_NAND_BCM47XXNFLASH)	+= bcm47xxnflash/
+ 
+diff --git a/drivers/mtd/nand/amimap.c b/drivers/mtd/nand/amimap.c
+new file mode 100644
+index 0000000..e7cbef9
+--- /dev/null
++++ b/drivers/mtd/nand/amimap.c
+@@ -0,0 +1,54 @@
++/*
++ * AMI (RACTRENDS) Parition Map for NAND
++ *
++ * Copyright (C) 2008 American Megatrends Inc
++ *
++ */
++
++#include <linux/init.h>
++#include <linux/types.h>
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/vmalloc.h>
++#include <linux/slab.h>
++#include <linux/errno.h>
++#include <linux/string.h>
++#include <linux/mtd/mtd.h>
++#include <linux/mtd/nand.h>
++#include <linux/mtd/partitions.h>
++#include <linux/delay.h>
++
++
++int
++CreateNandPartitions(struct mtd_partition *part,unsigned long nandsize)
++{
++	/* Minimum Required is 32M */
++	if (nandsize < 32*1024*1024)
++		return 0;
++		
++	part[1].name 	= "Kernel";
++	part[1].offset 	= 0;
++	part[1].size 	= 8*1024*1024;
++
++	part[2].name 	= "Config";
++	part[2].offset 	= 8*1024*1024;
++	part[2].size 	= 8*1024*1024;
++	
++	part[3].name 	= "Root Fs";
++	part[3].offset 	= 16*1024*1024;
++	part[3].size 	= 12*1024*1024;
++
++	part[4].name 	= "Web Fs";
++	part[4].offset 	= 28*1024*1024;
++	part[4].size 	= 4 *1024 *1024;
++
++	if (nandsize > (32 *1024 *1024))
++	{
++		part[5].name 	= "User Area";
++		part[5].offset 	= 32*1024*1024;
++		part[5].size 	= nandsize - (32*1024*1024);
++		return 5;
++	}
++
++	return 4;
++}
+-- 
+1.9.1
+
