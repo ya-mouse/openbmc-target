@@ -1598,7 +1598,7 @@ index 0000000..a6f2d5f
 +	}
 +
 +	ether_setup(dev); /* Fill in the fields of the device structure with ethernet values. */
-+	SET_ETHTOOL_OPS(dev, &ast_ether_ethtool_ops);
++	dev->ethtool_ops = &ast_ether_ethtool_ops;
 +	/*
 +	 * initialize private data structure 'priv'
 +	 * it is zeroed and aligned in alloc_etherdev
@@ -4308,7 +4308,7 @@ index 0000000..7ed82b8
 +	}
 +	SET_NETDEV_DEV(netdev, &pdev->dev);
 +
-+	SET_ETHTOOL_OPS(netdev, &ast_ether_ethtool_ops);
++	netdev->ethtool_ops = &ast_ether_ethtool_ops;
 +	
 +#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,30))
 +	netdev->netdev_ops 			= &ast_netdev_ops;
@@ -6454,7 +6454,7 @@ index 0000000..ac4fae7
 +
 +	SET_NETDEV_DEV(netdev, &pdev->dev);
 +
-+	SET_ETHTOOL_OPS(netdev, &ftgmac100_ethtool_ops);
++	netdev->ethtool_ops = &ftgmac100_ethtool_ops;
 +	netdev->netdev_ops = &ftgmac100_netdev_ops;
 +	netdev->features = NETIF_F_IP_CSUM | NETIF_F_GRO;
 +
