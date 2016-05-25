@@ -347,7 +347,7 @@ index 0000000..a6f2d5f
 +            {
 +				if(priv->link_state != 1)
 +				{
-+					netdev_link_up(dev);
++					//netdev_link_up(dev);
 +					priv->link_state = 1;
 +				}
 +                rtnl_unlock();
@@ -356,7 +356,7 @@ index 0000000..a6f2d5f
 +            {
 +				if(priv->link_state != 1)
 +				{
-+					netdev_link_up(dev);
++					//netdev_link_up(dev);
 +					priv->link_state = 1;
 +				}
 +            }
@@ -502,7 +502,7 @@ index 0000000..a6f2d5f
 +            {
 +				if(priv->link_state != 0)
 +				{
-+					netdev_link_down(dev);
++					//netdev_link_down(dev);
 +					priv->link_state = 0;
 +				}
 +                rtnl_unlock();
@@ -511,7 +511,7 @@ index 0000000..a6f2d5f
 +            {
 +				if(priv->link_state != 0)
 +				{
-+					netdev_link_down(dev);
++					//netdev_link_down(dev);
 +					priv->link_state = 0;
 +				}
 +            }

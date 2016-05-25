@@ -1,0 +1,55 @@
+--- linux-3.18.29/arch/arm/mach-astevb/Kconfig.orig	2016-05-25 20:54:40.443433484 +0300
++++ linux-3.18.29/arch/arm/mach-astevb/Kconfig	2016-05-25 20:57:17.597017575 +0300
+@@ -0,0 +1,41 @@
++if ARCH_AST2400EVB
++
++choice
++
++       prompt "Flash type"
++       default SPX_FEATURE_GLOBAL_FLASH_TYPE_SPI
++
++config SPX_FEATURE_GLOBAL_FLASH_TYPE_SPI
++       bool "SPI"
++
++config SPX_FEATURE_GLOBAL_FLASH_TYPE_NOR
++       bool "NOR"
++
++endchoice
++
++config SPX_FEATURE_GLOBAL_FLASH_BANKS
++       int "Number of flash banks"
++       range 1 4
++       default "1"
++
++config SPX_FEATURE_GLOBAL_FLASH_START
++       hex "Flash start address"
++       range 0 0x40000000
++       default 0x20000000
++
++config SPX_FEATURE_GLOBAL_FLASH_SIZE
++       hex "Flash size"
++       range 0 0x4000000
++       default 0x2000000
++
++config SPX_FEATURE_GLOBAL_NIC_COUNT
++       int "Number of NIC"
++       range 2 4
++       default 2
++
++config SPX_FEATURE_BAUDRATE_CONSOLE_TTY
++       int "Console baudrate"
++       range 9600 230400
++       default 38400
++
++endif
+--- linux-3.18.28/arch/arm/Kconfig.orig	2016-05-24 19:56:13.000000000 +0300
++++ linux-3.18.28/arch/arm/Kconfig	2016-05-25 20:45:23.735993784 +0300
+@@ -889,6 +889,8 @@ config ARCH_VIRT
+ # Kconfigs may be included either alphabetically (according to the
+ # plat- suffix) or along side the corresponding mach-* source.
+ #
++source "arch/arm/mach-astevb/Kconfig"
++
+ source "arch/arm/mach-mvebu/Kconfig"
+ 
+ source "arch/arm/mach-at91/Kconfig"
