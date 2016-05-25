@@ -2606,7 +2606,7 @@ new file mode 100644
 index 0000000..ac425b2
 --- /dev/null
 +++ b/arch/arm/include/asm/soc-ast/hwmap.h
-@@ -0,0 +1,537 @@
+@@ -0,0 +1,534 @@
 +/*
 + *  This file contains the AST SOC Register Base, IRQ and DMA  mappings
 + *
@@ -2638,9 +2638,6 @@ index 0000000..ac425b2
 +
 +#define AST_REGISTER_BASE              0x14000000
 +#define AST_REGISTER_SIZE              0x0A800000
-+
-+#define CONFIG_SPX_FEATURE_GLOBAL_FLASH_START	0x20000000 /* CS0 */
-+#define CONFIG_SPX_FEATURE_GLOBAL_NIC_COUNT	2
 +
 +/*--------------------------- Individual Devices ------------------------- */
 +#define AST_SPI_FLASH_BASE             CONFIG_SPX_FEATURE_GLOBAL_FLASH_START
