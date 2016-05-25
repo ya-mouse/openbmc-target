@@ -1,0 +1,139 @@
+From 2811b470c419d519fc56bd6b0ca9df1611b49273 Mon Sep 17 00:00:00 2001
+From: "Anton D. Kachalov" <mouse@yandex-team.ru>
+Date: Wed, 25 May 2016 20:39:20 +0300
+Subject: [PATCH] Fixup i2c
+
+Signed-off-by: Anton D. Kachalov <mouse@yandex-team.ru>
+---
+ include/linux/i2c.h          | 61 ++++++++++++++++++++++++++++++++++++++++++++
+ include/uapi/linux/i2c-dev.h | 14 ++++++++++
+ 2 files changed, 75 insertions(+)
+
+diff --git a/include/linux/i2c.h b/include/linux/i2c.h
+index b556e0a..3a58c42 100644
+--- a/include/linux/i2c.h
++++ b/include/linux/i2c.h
+@@ -34,6 +34,10 @@
+ #include <linux/swab.h>		/* for swab16 */
+ #include <uapi/linux/i2c.h>
+ 
++#define MAX_IPMB_MSG_SIZE  128
++#define MAX_I2C_ADAPTERS   16
++
++
+ extern struct bus_type i2c_bus_type;
+ extern struct device_type i2c_adapter_type;
+ 
+@@ -70,6 +74,10 @@ extern int i2c_transfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+ extern int __i2c_transfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+ 			  int num);
+ 
++/* Extended IOCTLs -implemented in i2c-core */
++extern int i2c_ioctl(struct i2c_adapter *adap, unsigned long cmd, unsigned long arg);
++
++
+ /* This is the very generalized SMBus access routine. You probably do not
+    want to use this, though; one of the functions below may be much easier,
+    and probably just as fast.
+@@ -82,6 +90,10 @@ extern s32 i2c_smbus_xfer(struct i2c_adapter *adapter, u16 addr,
+ /* Now follow the 'nice' access routines. These also document the calling
+    conventions of i2c_smbus_xfer. */
+ 
++extern u8 i2c_smbus_msg_pec(u8 pec, struct i2c_msg *msg);
++extern void i2c_smbus_add_pec(struct i2c_msg *msg);
++extern int i2c_smbus_check_pec(u8 cpec, struct i2c_msg *msg);
++
+ extern s32 i2c_smbus_read_byte(const struct i2c_client *client);
+ extern s32 i2c_smbus_write_byte(const struct i2c_client *client, u8 value);
+ extern s32 i2c_smbus_read_byte_data(const struct i2c_client *client,
+@@ -377,6 +389,19 @@ struct i2c_algorithm {
+ 
+ 	/* To determine what the adapter supports */
+ 	u32 (*functionality) (struct i2c_adapter *);
++
++   /* AMI Extended Functions */
++   /* i2c recovery */
++   int (*i2c_recovery) (struct i2c_adapter *adap);
++
++   /* Slave Receive and Slave Send Functions */
++   int (*slave_send)(struct i2c_adapter *adap , char *data ,int size);
++   int (*slave_recv)(struct i2c_adapter *adap , char *data ,int size);
++   int (*smb_slave_recv)(struct i2c_adapter *adap , char *data , int size);
++
++   /* Extended IOCTL Calls */
++   int (*i2c_hw_ioctl)(struct i2c_adapter *adap, unsigned long cmd , unsigned long arg);
++
+ };
+ 
+ /**
+@@ -418,6 +443,42 @@ int i2c_recover_bus(struct i2c_adapter *adap);
+ int i2c_generic_gpio_recovery(struct i2c_adapter *adap);
+ int i2c_generic_scl_recovery(struct i2c_adapter *adap);
+ 
++/****************************************************/
++/* 			AMI Recovery Begin 					    */
++/* Keeping this for backward compatability. May be  */
++/* from 3.14.x onwards we can use generic recovery? */		
++/****************************************************/
++extern int i2c_recovery_event(void);
++
++/*
++ * i2c_recovery is the structure used to specify the recovery parameters for the bus
++ */
++#define DEFAULT_NUM_PULSES     16
++#define DEFAULT_PULSE_PERIOD       5
++#define DEFAULT_FREQ           100000
++#define ENABLE_SMBUS_RESET     1
++#define DISABLE_SMBUS_RESET        0
++#define ENABLE_CLOCK_PULSE     1
++#define DISABLE_CLOCK_PULSE        0
++#define ENABLE_FORCE_STOP      1
++#define DISABLE_FORCE_STOP     0
++#define ENABLE_RECOVERY            1
++#define DISABLE_RECOVERY       0   /* Recovery should not be done on multi-master bus - Disable Recovery */
++typedef struct
++{
++   int enable_recovery;
++   int is_smbus_reset_enabled;
++   int is_generate_clock_pulses_enabled;
++   int is_force_stop_enabled;
++   int num_clock_pulses;
++   int frequency;
++} bus_recovery_info_T;
++
++/**************************************************/
++/*               AMI Recovery End				  */
++/**************************************************/
++
++
+ /*
+  * i2c_adapter is the structure used to identify a physical i2c bus along
+  * with the access algorithms necessary to access it.
+diff --git a/include/uapi/linux/i2c-dev.h b/include/uapi/linux/i2c-dev.h
+index 3f31155..841c198 100644
+--- a/include/uapi/linux/i2c-dev.h
++++ b/include/uapi/linux/i2c-dev.h
+@@ -51,6 +51,20 @@
+ #define I2C_PEC		0x0708	/* != 0 to use PEC with SMBus */
+ #define I2C_SMBUS	0x0720	/* SMBus transfer */
+ 
++/* Extended IOCTLS - Implemented in i2c-core and hardware */
++#define I2C_SLAVEREAD      0x0750  /* Perform Slave Read   */
++#define I2C_SLAVEWRITE     0x0751  /* Perform Slave Write  */
++#define I2C_SET_HOST_ADDR  0x0752  /* Set Slave Address of the Controller */
++#define I2C_GET_HOST_ADDR  0x0753  /* Get Slave Address of the Controller */
++#define I2C_SET_REC_INFO   0x0754  /* Set Recovery Parameters */
++#define I2C_GET_REC_INFO   0x0755  /* Get Recovery Parameters */
++#define I2C_RESET      0x0756  /* Reset Controller */
++#define SMBUS_HOST_NOTIFY  0x0757 /* Perform SMBus Host Notify Protocol */
++#define I2C_SET_SPEED      0x0758  /* Set I2C Bus Speed */
++#define I2C_GET_LINK_STATE      0x0759  /* Get the Status of Clk/Data pin*/
++#define I2C_BUS_TEST            0x0850  /* Perform the I2C Bus test*/
++#define I2C_MCTP_READ           0x0851  /* Perform MCTP Pkt Read*/
++
+ 
+ /* This is the structure as used in the I2C_SMBUS ioctl call */
+ struct i2c_smbus_ioctl_data {
+-- 
+1.9.1
+
