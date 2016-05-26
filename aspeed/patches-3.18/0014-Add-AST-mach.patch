@@ -4348,7 +4348,7 @@ new file mode 100644
 index 0000000..fcb4974
 --- /dev/null
 +++ b/arch/arm/mach-astevb/setup.c
-@@ -0,0 +1,287 @@
+@@ -0,0 +1,343 @@
 +/*********************************************************************************  
 + *************** IMPORTANT NOTE:  READ THIS BEFORE EDITING THIS FILE  ************
 + *********************************************************************************
@@ -4386,6 +4386,11 @@ index 0000000..fcb4974
 +#include <linux/serial_core.h>
 +#include <linux/dma-contiguous.h>
 +#include <linux/platform_device.h>
++
++#include <linux/mtd/mtd.h>
++#include <linux/mtd/map.h>
++#include <linux/mtd/partitions.h>
++#include <linux/mtd/plat-ram.h>
 +
 +#include <asm/io.h>
 +#include <asm/pgtable.h>
@@ -4551,6 +4556,55 @@ index 0000000..fcb4974
 +};
 +#endif
 +
++/*
++ * 8M NOR flash Device bus boot chip select
++ */
++static struct mtd_partition ast2400_spi_flash_partitions[] = {
++	{
++		.name		= "uboot",
++		.offset		= 0x00000000,
++		.size		= 3*SZ_64K,
++		.mask_flags	= MTD_WRITEABLE,
++	}, {
++		.name		= "kernel",
++		.offset		= 0x00100000,
++		.size		= 0x00300000,
++	}, {
++		.name		= "rootfs",
++		.offset		= 0x00400000,
++		.size		= 0x01000000,
++	}, {
++		.name		= "rootfs_data",
++		.offset		= 0x01400000,
++		.size		= 0x00c00000,
++	},
++};
++
++static const char *ast2400_spi_part_types[] = { "spi_probe", NULL };
++
++static struct platdata_mtd_ram ast2400_spi_flash_data = {
++	.bankwidth	= 2,
++	.partitions	= ast2400_spi_flash_partitions,
++	.nr_partitions	= ARRAY_SIZE(ast2400_spi_flash_partitions),
++	.map_probes	= ast2400_spi_part_types,
++};
++
++static struct resource ast2400_spi_flash_resource = {
++	.flags		= IORESOURCE_MEM,
++	.start		= CONFIG_SPX_FEATURE_GLOBAL_FLASH_START,
++	.end		= CONFIG_SPX_FEATURE_GLOBAL_FLASH_START + CONFIG_SPX_FEATURE_GLOBAL_FLASH_SIZE - 1,
++};
++
++static struct platform_device ast2400_spi_flash = {
++	.name			= "mtd-ram",
++	.id			= 0,
++	.dev		= {
++		.platform_data	= &ast2400_spi_flash_data,
++	},
++	.num_resources		= 1,
++	.resource		= &ast2400_spi_flash_resource,
++};
++
 +void __init astevb_init(void)
 +{
 +	/* Register idle and restart handler */
@@ -4561,6 +4615,8 @@ index 0000000..fcb4974
 +#ifdef CONFIG_SPX_FEATURE_PACKAGES_SSP_SUPPORT
 +	platform_device_register(&ssp_device);
 +#endif
++
++	platform_device_register(&ast2400_spi_flash);
 +
 +#if defined(CONFIG_SOC_AST3100) || defined(CONFIG_SOC_AST3200)
 +	/* Register EHCI and UHCI Host devices */
