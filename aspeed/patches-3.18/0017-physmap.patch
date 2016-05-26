@@ -1,0 +1,22 @@
+--- linux-3.18.29/drivers/mtd/maps/Kconfig.orig	2016-05-24 19:47:30.000000000 +0300
++++ linux-3.18.29/drivers/mtd/maps/Kconfig	2016-05-25 23:08:41.286783761 +0300
+@@ -10,7 +10,7 @@ config MTD_COMPLEX_MAPPINGS
+ 
+ config MTD_PHYSMAP
+ 	tristate "Flash device in physical memory map"
+-	depends on MTD_CFI || MTD_JEDECPROBE || MTD_ROM || MTD_LPDDR
++	depends on MTD_CFI || MTD_JEDECPROBE || MTD_ROM || MTD_LPDDR || MTD_SPI
+ 	help
+ 	  This provides a 'mapping' driver which allows the NOR Flash and
+ 	  ROM driver code to communicate with chips which are mapped
+--- linux-3.18.29/drivers/mtd/maps/physmap.c.orig	2016-05-25 23:09:18.618256216 +0300
++++ linux-3.18.29/drivers/mtd/maps/physmap.c	2016-05-25 23:09:05.846436870 +0300
+@@ -87,7 +87,7 @@ static void physmap_set_vpp(struct map_i
+ }
+ 
+ static const char * const rom_probe_types[] = {
+-	"cfi_probe", "jedec_probe", "qinfo_probe", "map_rom", NULL };
++	"cfi_probe", "jedec_probe", "qinfo_probe", "map_rom", "spi_probe", NULL };
+ 
+ static const char * const part_probe_types[] = {
+ 	"cmdlinepart", "RedBoot", "afs", NULL };
