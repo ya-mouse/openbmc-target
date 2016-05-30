@@ -77,7 +77,7 @@ diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
 index 89c4b5c..1c176a0 100644
 --- a/arch/arm/Kconfig
 +++ b/arch/arm/Kconfig
-@@ -302,8 +302,17 @@ config MMU
+@@ -302,8 +302,26 @@ config MMU
  #
  choice
  	prompt "ARM system type"
@@ -94,10 +94,19 @@ index 89c4b5c..1c176a0 100644
 +     If you would like to build your kernel to run on one of these boards
 +     then you must say 'Y' here. Otherwise say 'N'
 +
++config ARCH_AST2300EVB
++   bool "ASPEED A2300"
++   select SOC_AST2300
++   select NEED_MACH_IO_H
++   help
++     This is an evaluation board from ASPEED based on AST2300 SOC
++     If you would like to build your kernel to run on one of these boards
++     then you must say 'Y' here. Otherwise say 'N'
++
  
  config ARCH_MULTIPLATFORM
  	bool "Allow multiple platforms to be selected"
-@@ -788,6 +797,34 @@ config ARCH_OMAP1
+@@ -788,6 +797,39 @@ config ARCH_OMAP1
  
  endchoice
  
@@ -107,9 +116,14 @@ index 89c4b5c..1c176a0 100644
 +   select CPU_ARM926T
 +   default y if ARCH_AST2400EVB
 +
++config SOC_AST2300
++   bool
++   select CPU_ARM926T
++   default y if ARCH_AST2300EVB
++
 +config BASESOC_AST
 +   bool
-+   default y if SOC_AST2400
++   default y if SOC_AST2400 || SOC_AST2300
 +
 +config ASTSERIAL
 +   bool "Aspeed Serial support"
@@ -136,11 +150,12 @@ diff --git a/arch/arm/Makefile b/arch/arm/Makefile
 index b5d7988..2e07d35 100644
 --- a/arch/arm/Makefile
 +++ b/arch/arm/Makefile
-@@ -168,6 +168,7 @@ machine-$(CONFIG_ARCH_GEMINI)		+= gemini
+@@ -168,6 +168,8 @@ machine-$(CONFIG_ARCH_GEMINI)		+= gemini
  machine-$(CONFIG_ARCH_HIGHBANK)		+= highbank
  machine-$(CONFIG_ARCH_HISI)		+= hisi
  machine-$(CONFIG_ARCH_INTEGRATOR)	+= integrator
-+machine-$(CONFIG_ARCH_AST2400EVB)   += astevb
++machine-$(CONFIG_ARCH_AST2300EVB)	+= astevb
++machine-$(CONFIG_ARCH_AST2400EVB)	+= astevb
  machine-$(CONFIG_ARCH_IOP13XX)		+= iop13xx
  machine-$(CONFIG_ARCH_IOP32X)		+= iop32x
  machine-$(CONFIG_ARCH_IOP33X)		+= iop33x
@@ -3663,7 +3678,7 @@ index 0000000..e204a62
 +#include <mach/lowlevel_serial.h>
 +
 +mmu_enabled:
-+		.word	io_mapping_done
++/*		.word	io_mapping_done */
 +
 +		.macro	addruart, rp, rv, temp
 +		ldr	\rp, =UART_BASE		@ physical address
@@ -4348,7 +4363,7 @@ new file mode 100644
 index 0000000..fcb4974
 --- /dev/null
 +++ b/arch/arm/mach-astevb/setup.c
-@@ -0,0 +1,343 @@
+@@ -0,0 +1,352 @@
 +/*********************************************************************************  
 + *************** IMPORTANT NOTE:  READ THIS BEFORE EDITING THIS FILE  ************
 + *********************************************************************************
@@ -4572,11 +4587,20 @@ index 0000000..fcb4974
 +	}, {
 +		.name		= "rootfs",
 +		.offset		= 0x00400000,
++#if defined(CONFIG_SOC_AST2300)
++		.size		= 0x00400000,
++#else
 +		.size		= 0x01000000,
++#endif
 +	}, {
 +		.name		= "rootfs_data",
++#if defined(CONFIG_SOC_AST2300)
++		.offset		= 0x00800000,
++		.size		= 0x00800000,
++#else
 +		.offset		= 0x01400000,
 +		.size		= 0x00c00000,
++#endif
 +	},
 +};
 +
@@ -4949,12 +4973,13 @@ diff --git a/arch/arm/tools/mach-types b/arch/arm/tools/mach-types
 index a10297d..d996e8c 100644
 --- a/arch/arm/tools/mach-types
 +++ b/arch/arm/tools/mach-types
-@@ -189,7 +189,8 @@ nxdkn			MACH_NXDKN		NXDKN			880
+@@ -189,7 +189,9 @@ nxdkn			MACH_NXDKN		NXDKN			880
  palmtx			MACH_PALMTX		PALMTX			885
  s3c2413			MACH_S3C2413		S3C2413			887
  wg302v2			MACH_WG302V2		WG302V2			890
 -omap_2430sdp		MACH_OMAP_2430SDP	OMAP_2430SDP		900
 +#omap_2430sdp		MACH_OMAP_2430SDP	OMAP_2430SDP		900
++ast2300evb		MACH_AST2300EVB		AST2300EVB		900
 +ast2400evb		MACH_AST2400EVB		AST2400EVB		900
  davinci_evm		MACH_DAVINCI_EVM	DAVINCI_EVM		901
  palmz72			MACH_PALMZ72		PALMZ72			904

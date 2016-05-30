@@ -1,5 +1,5 @@
---- linux-3.18.29/drivers/rts/rtc-aspeed.c.orig	2015-11-10 10:55:06.652224999 +0300
-+++ linux-3.18.29/drivers/rts/rtc-aspeed.c	2016-04-21 14:17:14.411807358 +0300
+--- linux-3.18.29/drivers/rtc/rtc-aspeed.c.orig	2015-11-10 10:55:06.652224999 +0300
++++ linux-3.18.29/drivers/rtc/rtc-aspeed.c	2016-04-21 14:17:14.411807358 +0300
 @@ -0,0 +1,495 @@
 +/********************************************************************************
 +* File Name     : drivers/rtc/rtc-ast.c
@@ -496,8 +496,8 @@
 +MODULE_LICENSE("GPL");
 +MODULE_ALIAS("platform:ast_rtc");
 +
---- linux-3.18.29/drivers/rts/Kconfig.orig	2016-05-24 19:47:29.000000000 +0300
-+++ linux-3.18.29/drivers/rts/Kconfig	2016-05-26 17:51:37.414853167 +0300
+--- linux-3.18.29/drivers/rtc/Kconfig.orig	2016-05-24 19:47:29.000000000 +0300
++++ linux-3.18.29/drivers/rtc/Kconfig	2016-05-26 17:51:37.414853167 +0300
 @@ -1445,5 +1445,11 @@ config RTC_DRV_HID_SENSOR_TIME
  	  If this driver is compiled as a module, it will be named
  	  rtc-hid-sensor-time.
@@ -510,8 +510,8 @@
 +
  
  endif # RTC_CLASS
---- linux-3.18.29/drivers/rts/Makefile.orig	2016-05-24 19:47:29.000000000 +0300
-+++ linux-3.18.29/drivers/rts/Makefile	2016-05-26 17:51:55.126581651 +0300
+--- linux-3.18.29/drivers/rtc/Makefile.orig	2016-05-24 19:47:29.000000000 +0300
++++ linux-3.18.29/drivers/rtc/Makefile	2016-05-26 17:51:55.126581651 +0300
 @@ -151,3 +151,4 @@ obj-$(CONFIG_RTC_DRV_X1205)	+= rtc-x1205
  obj-$(CONFIG_RTC_DRV_XGENE)	+= rtc-xgene.o
  obj-$(CONFIG_RTC_DRV_SIRFSOC)	+= rtc-sirfsoc.o

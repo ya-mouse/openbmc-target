@@ -1,7 +1,7 @@
 --- linux-3.18.29/arch/arm/mach-astevb/Kconfig.orig	2016-05-25 20:54:40.443433484 +0300
 +++ linux-3.18.29/arch/arm/mach-astevb/Kconfig	2016-05-25 20:57:17.597017575 +0300
-@@ -0,0 +1,76 @@
-+if ARCH_AST2400EVB
+@@ -0,0 +1,80 @@
++if BASESOC_AST
 +
 +choice
 +
@@ -34,7 +34,8 @@
 +config SPX_FEATURE_GLOBAL_FLASH_SIZE
 +       hex "Flash size"
 +       range 0 0x4000000
-+       default 0x2000000
++       default 0x1000000 if SOC_AST2300
++       default 0x2000000 if SOC_AST2400
 +
 +config SPX_FEATURE_GLOBAL_UBOOT_ENV_START
 +       hex "U-boot env start address"
@@ -54,7 +55,8 @@
 +config SPX_FEATURE_GLOBAL_USED_FLASH_SIZE
 +       hex "Used flash size"
 +       range 0 0x4000000
-+       default 0x0200000
++       default 0x0100000 if SOC_AST2300
++       default 0x0200000 if SOC_AST2400
 +
 +config SPX_FEATURE_GLOBAL_NIC_COUNT
 +       int "Number of NIC"
@@ -69,12 +71,14 @@
 +config SPX_FEATURE_NUM_TOTOL_I2C_BUSES
 +       int "Number of i2c buses"
 +       range 0 64
-+       default 12
++       default 9 if SOC_AST2300
++       default 14 if SOC_AST2400
 +
 +config SPX_FEATURE_BAUDRATE_CONSOLE_TTY
 +       int "Console baudrate"
 +       range 9600 230400
-+       default 38400
++       default 115200 if SOC_AST2300
++       default 38400 if SOC_AST2400
 +
 +endif
 --- linux-3.18.28/arch/arm/Kconfig.orig	2016-05-24 19:56:13.000000000 +0300
