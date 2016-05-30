@@ -10,12 +10,8 @@ BOARDNAME:=Aspeed 2150 based boards
 #CPU_SUBTYPE:=dsp
 #CFLAGS:=-Os -pipe -mmt -mips32r2 -mtune=1004kc
 
-KERNEL_PATCHVER:=2.6.28.9
+KERNEL_PATCHVER:=3.18
 KERNELNAME:=zImage
-
-CONFIG_KERNEL_GIT_LOCAL_REPOSITORY:=""
-CONFIG_KERNEL_GIT_BRANCH:=""
-CONFIG_KERNEL_GIT_CLONE_URI:=git://github.com/ya-mouse/openwrt-linux-aspeed.git
 
 define Target/Description
 	Build firmware images for Aspeed 2150 based boards.
