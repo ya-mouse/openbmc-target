@@ -1312,6 +1312,7 @@ CONFIG_PACKAGE_binutils=m
 # CONFIG_PACKAGE_make is not set
 CONFIG_PACKAGE_objdump=m
 # CONFIG_PACKAGE_patch is not set
+# CONFIG_PACKAGE_perf is not set
 # CONFIG_PACKAGE_pkg-config is not set
 # CONFIG_PACKAGE_trace-cmd is not set
 # CONFIG_PACKAGE_trace-cmd-extra is not set
@@ -1471,6 +1472,7 @@ CONFIG_PACKAGE_objdump=m
 #
 # I2C support
 #
+CONFIG_PACKAGE_kmod-i2c-ast=y
 # CONFIG_PACKAGE_kmod-i2c-core is not set
 # CONFIG_PACKAGE_kmod-i2c-gpio-custom is not set
 
@@ -1656,8 +1658,8 @@ CONFIG_PACKAGE_kmod-nf-nat=m
 # CONFIG_PACKAGE_kmod-l2tp-ip is not set
 # CONFIG_PACKAGE_kmod-llc is not set
 # CONFIG_PACKAGE_kmod-misdn is not set
+# CONFIG_PACKAGE_kmod-mpls is not set
 # CONFIG_PACKAGE_kmod-netem is not set
-# CONFIG_PACKAGE_kmod-openvswitch is not set
 # CONFIG_PACKAGE_kmod-pktgen is not set
 # CONFIG_PACKAGE_kmod-ppp is not set
 # CONFIG_PACKAGE_kmod-sched is not set
@@ -1679,6 +1681,7 @@ CONFIG_PACKAGE_kmod-nf-nat=m
 # Other modules
 #
 # CONFIG_PACKAGE_kmod-6lowpan is not set
+CONFIG_PACKAGE_kmod-ast-helper=y
 # CONFIG_PACKAGE_kmod-ath3k is not set
 # CONFIG_PACKAGE_kmod-bluetooth is not set
 # CONFIG_PACKAGE_kmod-bluetooth_6lowpan is not set
@@ -1793,6 +1796,13 @@ CONFIG_PACKAGE_kmod-nf-nat=m
 #
 # WPAN 802.15.4 Support
 #
+# CONFIG_PACKAGE_kmod-at86rf230 is not set
+# CONFIG_PACKAGE_kmod-cc2520 is not set
+# CONFIG_PACKAGE_kmod-fakelb is not set
+# CONFIG_PACKAGE_kmod-ieee802154 is not set
+# CONFIG_PACKAGE_kmod-ieee802154_6lowpan is not set
+# CONFIG_PACKAGE_kmod-mac802154 is not set
+# CONFIG_PACKAGE_kmod-mrf24j40 is not set
 
 #
 # Wireless Drivers
@@ -2960,16 +2970,6 @@ CONFIG_POSTFIX_CDB=y
 #
 # Open vSwitch
 #
-# CONFIG_PACKAGE_openvswitch is not set
-# CONFIG_PACKAGE_openvswitch-base is not set
-# CONFIG_PACKAGE_openvswitch-benchmark is not set
-# CONFIG_PACKAGE_openvswitch-ipsec is not set
-# CONFIG_PACKAGE_openvswitch-ovs-appctl is not set
-# CONFIG_PACKAGE_openvswitch-ovs-dpctl is not set
-# CONFIG_PACKAGE_openvswitch-ovs-ofctl is not set
-# CONFIG_PACKAGE_openvswitch-ovs-vsctl is not set
-# CONFIG_PACKAGE_openvswitch-ovsdb-client is not set
-# CONFIG_PACKAGE_openvswitch-python is not set
 
 #
 # Printing
@@ -3513,13 +3513,21 @@ CONFIG_WPA_MSG_MIN_PRIORITY=3
 # CONFIG_PACKAGE_haveged is not set
 # CONFIG_PACKAGE_hub-ctrl is not set
 # CONFIG_PACKAGE_hwclock is not set
-# CONFIG_PACKAGE_i2c-tools is not set
+CONFIG_PACKAGE_i2c-tools=m
 # CONFIG_PACKAGE_iconv is not set
 # CONFIG_PACKAGE_iwcap is not set
 # CONFIG_PACKAGE_iwinfo is not set
 # CONFIG_PACKAGE_jpeg-tools is not set
 CONFIG_PACKAGE_jshn=y
-# CONFIG_PACKAGE_kexec-tools is not set
+CONFIG_PACKAGE_kexec-tools=m
+
+#
+# Configuration
+#
+CONFIG_KEXEC_TOOLS_TARGET_NAME="arm"
+# CONFIG_KEXEC_TOOLS_kdump is not set
+CONFIG_KEXEC_ZLIB=y
+# CONFIG_KEXEC_LZMA is not set
 # CONFIG_PACKAGE_kmod is not set
 # CONFIG_PACKAGE_lcd4linux-custom is not set
 # CONFIG_PACKAGE_lcd4linux-full is not set
