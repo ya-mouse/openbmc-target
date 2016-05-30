@@ -13,10 +13,6 @@ BOARDNAME:=Aspeed 2400 based boards
 KERNEL_PATCHVER:=3.18
 KERNELNAME:=zImage
 
-#CONFIG_KERNEL_GIT_LOCAL_REPOSITORY:=""
-#CONFIG_KERNEL_GIT_BRANCH:=""
-#CONFIG_KERNEL_GIT_CLONE_URI:=git://github.com/ya-mouse/openwrt-linux-aspeed.git
-
 define Target/Description
 	Build firmware images for Aspeed 2400 based boards.
 endef
