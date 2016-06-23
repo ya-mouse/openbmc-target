@@ -8,7 +8,9 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
 define Image/Prepare
-	mkimage -A arm -O linux -T kernel -C none -a 0x40008000 -e 0x40008000 -n 'OpenWrt Linux-$(LINUX_VERSION)' -d $(KDIR)/zImage $(KDIR)/uImage
+	$(call Image/BuildDTB,../dts/$(PROFILE).dts,$(KDIR)/$(PROFILE).dtb)
+	cat $(KDIR)/zImage $(KDIR)/$(PROFILE).dtb > $(KDIR)/zImage.dtb
+	mkimage -A arm -O linux -T kernel -C none -a 0x40008000 -e 0x40008000 -n 'OpenWrt Linux-$(LINUX_VERSION)' -d $(KDIR)/zImage.dtb $(KDIR)/uImage
 endef
 
 # Build sysupgrade image

@@ -14,7 +14,7 @@ FEATURES:=squashfs gpio
 CPU_TYPE:=arm926ej-s
 MAINTAINER:=Anton D. Kachalov <mouse@yandex.ru>
 
-KERNEL_PATCHVER:=3.18
+KERNEL_PATCHVER:=4.4
 
 include $(INCLUDE_DIR)/target.mk
 DEFAULT_PACKAGES += \

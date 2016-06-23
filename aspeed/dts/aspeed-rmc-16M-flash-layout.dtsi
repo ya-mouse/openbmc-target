@@ -1,0 +1,24 @@
+/* This file is the label for the bmc primary flash and its partitions */
+				label = "bmc";
+				#address-cells = < 1 >;
+				#size-cells = < 1 >;
+				u-boot {
+					reg = < 0 0x20000 >;
+					label = "u-boot";
+				};
+				u-boot-env {
+					reg = < 0x20000 0x10000 >;
+					label = "u-boot-env";
+				};
+				kernel  {
+					reg = < 0x100000 0x300000 >;
+					label = "kernel";
+				};
+				rootfs {
+					reg = < 0x400000 0x400000 >;
+					label = "rootfs";
+				};
+				rootfs_data  {
+					reg = < 0x800000 0x800000 >;
+					label = "rootfs_data";
+				};

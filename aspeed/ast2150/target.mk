@@ -10,8 +10,12 @@ BOARDNAME:=Aspeed 2150 based boards
 #CPU_SUBTYPE:=dsp
 #CFLAGS:=-Os -pipe -mmt -mips32r2 -mtune=1004kc
 
-KERNEL_PATCHVER:=3.18
+KERNEL_PATCHVER:=4.4
 KERNELNAME:=zImage
+
+CONFIG_KERNEL_GIT_LOCAL_REPOSITORY:=""
+CONFIG_KERNEL_GIT_BRANCH:="dev-4.4"
+CONFIG_KERNEL_GIT_CLONE_URI:=git://github.com/openbmc/linux.git
 
 define Target/Description
 	Build firmware images for Aspeed 2150 based boards.
