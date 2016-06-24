@@ -9,7 +9,7 @@
 
 	ahb {
 		mac0: ethernet@1e660000 {
-			use-nc-si;
+			/* use-nc-si; */
 			no-hw-checksum;
 		};
 
@@ -58,6 +58,12 @@
 						#size-cells = <0>;
 						reg = <0x74>;
 						reset-gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
+					};
+				};
+				i2c3: i2c-bus@100 {
+					tmp@48 {
+						compatible = "national,lm75";
+						reg = <0x48>;
 					};
 				};
 			};

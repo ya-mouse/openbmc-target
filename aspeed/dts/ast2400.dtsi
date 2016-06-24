@@ -266,18 +266,20 @@
 				status = "okay";
 			};
 
-#if 0
+#if 1
 			wdt: wdt@1e785000 {
 				compatible = "aspeed,wdt", "wdt";
 				reg = <0x1e785000 0x1c4>;
 				interrupts = <27>;
 				clocks = <&clk_apb>;
+				timeout-sec = <30>;
+				status = "okay";
 			};
 #endif
 			rtc: rtc@1e781000 {
 				compatible = "aspeed,rtc";
 				reg = <0x1e781000 0x18>;
-				status = "disabled";
+				status = "okay";
 			};
 
 			timer: timer@98400000 {
