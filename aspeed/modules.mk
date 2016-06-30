@@ -32,3 +32,15 @@ define KernelPackage/videocap
 endef
 
 $(eval $(call KernelPackage,videocap))
+
+define KernelPackage/i2c-aspeed
+  SUBMENU:=I2C support
+  TITLE:=I2C Aspeed bus
+  DEPENDS:=@TARGET_aspeed +kmod-i2c-core
+  FILES:=\
+	$(LINUX_DIR)/drivers/i2c/busses/i2c-aspeed.ko
+
+  AUTOLOAD:=$(call AutoLoad,1,i2c-aspeed)
+endef
+
+$(eval $(call KernelPackage,i2c-aspeed))
