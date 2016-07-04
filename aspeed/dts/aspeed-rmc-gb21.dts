@@ -13,6 +13,12 @@
 			no-hw-checksum;
 		};
 
+		mac1: ethernet@1e680000 {
+			compatible = "faraday,ftgmac100", "aspeed,ast2400-mac";
+			reg = <0x1e680000 0x180>;
+			interrupts = <3>;
+		};
+
 		fmc@1e620000 {
 			reg = < 0x1e620000 0x94
 				0x20000000 0x02000000 >;

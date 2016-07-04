@@ -1,4 +1,5 @@
 #include "skeleton.dtsi"
+#include <dt-bindings/pwm/ast-pwm.h>
 
 / {
 	model = "Palmetto BMC";
@@ -49,6 +50,11 @@
 			compatible = "fixed-clock";
 			clock-frequency = <384000000>;
 		};
+		clk_pwm: clk_pwm {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <24000000>;
+		};
 	};
 
 	ahb {
@@ -86,6 +92,44 @@
 				compatible = "aspeed,bt-host";
 				reg = <0x1e789140 0x18>;
 				interrupts = <8>;
+			};
+
+			pwm: pwm@1e786000 {
+				#pwm-cells = <5>;
+				compatible = "aspeed,pwm";
+				reg = <0x1e786000 0x7c>;
+				clocks = <&clk_pwm>;
+				pwm-number = <8>;
+			};
+
+	fan@0 {
+		compatible = "pwm-fan";
+		cooling-min-state = <0>;
+		cooling-max-state = <6>;
+		#cooling-cells = <2>;
+		pwms = <&pwm 0 0 42666 1 PWM_TYPE_N>;
+		cooling-levels = <0 1 30 64 128 200 255>;
+	};
+
+	fan@1 {
+		compatible = "pwm-fan";
+		cooling-min-state = <0>;
+		cooling-max-state = <6>;
+		#cooling-cells = <2>;
+		pwms = <&pwm 1 1 42666 1 PWM_TYPE_N>;
+		cooling-levels = <0 1 30 64 128 200 255>;
+	};
+
+			tach {
+				compatible = "aspeed,tach";
+
+				tach0: tach@0 {
+					pwms = <&pwm 0 42667 0 PWM_TYPE_M>;
+				};
+
+				tach1: tach@1 {
+					pwms = <&pwm 1 42667 0 PWM_TYPE_M>;
+				};
 			};
 
 			i2c: i2c@1e78a040 {
@@ -266,7 +310,6 @@
 				status = "okay";
 			};
 
-#if 1
 			wdt: wdt@1e785000 {
 				compatible = "aspeed,wdt", "wdt";
 				reg = <0x1e785000 0x1c4>;
@@ -275,7 +318,7 @@
 				timeout-sec = <30>;
 				status = "okay";
 			};
-#endif
+
 			rtc: rtc@1e781000 {
 				compatible = "aspeed,rtc";
 				reg = <0x1e781000 0x18>;
