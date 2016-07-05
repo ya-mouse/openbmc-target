@@ -13,9 +13,9 @@ BOARDNAME:=Aspeed 2150 based boards
 KERNEL_PATCHVER:=4.4
 KERNELNAME:=zImage
 
-CONFIG_KERNEL_GIT_LOCAL_REPOSITORY:=""
-CONFIG_KERNEL_GIT_BRANCH:="dev-4.4"
-CONFIG_KERNEL_GIT_CLONE_URI:=git://github.com/openbmc/linux.git
+#CONFIG_KERNEL_GIT_LOCAL_REPOSITORY:=""
+#CONFIG_KERNEL_GIT_BRANCH:="dev-4.4"
+#CONFIG_KERNEL_GIT_CLONE_URI:=git://github.com/openbmc/linux.git
 
 define Target/Description
 	Build firmware images for Aspeed 2150 based boards.
