@@ -1,0 +1,65 @@
+diff --git a/drivers/net/ethernet/faraday/ftgmac100.c b/drivers/net/ethernet/faraday/ftgmac100.c
+index 7eae197..0ad5cd0 100644
+--- a/drivers/net/ethernet/faraday/ftgmac100.c
++++ b/drivers/net/ethernet/faraday/ftgmac100.c
+@@ -44,6 +44,8 @@
+ #define MAX_PKT_SIZE		1518
+ #define RX_BUF_SIZE		PAGE_SIZE	/* must be smaller than 0x3fff */
+ 
++static int instance = 0;
++
+ /******************************************************************************
+  * private data
+  *****************************************************************************/
+@@ -1269,7 +1271,7 @@ static int ftgmac100_setup_mdio(struct ftgmac100 *priv)
+ 	}
+ 
+ 	priv->mii_bus->name = "ftgmac100_mdio";
+-	snprintf(priv->mii_bus->id, MII_BUS_ID_SIZE, "ftgmac100_mii");
++	snprintf(priv->mii_bus->id, MII_BUS_ID_SIZE, "ftgmac100_mii%x", instance);
+ 
+ 	priv->mii_bus->priv = priv->netdev;
+ 	priv->mii_bus->read = ftgmac100_mdiobus_read;
+@@ -1411,6 +1413,7 @@ static int ftgmac100_probe(struct platform_device *pdev)
+ 		if (!priv->ndev)
+ 			goto err_ncsi_dev;
+ 	} else {
++		instance++;
+ 		err = ftgmac100_setup_mdio(priv);
+ 
+ 		/* Survive PHY probe failure, chances things will work if the
+@@ -1432,9 +1435,10 @@ static int ftgmac100_probe(struct platform_device *pdev)
+ 	return 0;
+ 
+ err_register_netdev:
+-	if (!priv->use_ncsi)
++	if (!priv->use_ncsi) {
++		instance--;
+ 		ftgmac100_destroy_mdio(priv);
+-	else
++	} else
+ 		ncsi_unregister_dev(priv->ndev);
+ err_ncsi_dev:
+ 	iounmap(priv->base);
+diff --git a/drivers/watchdog/aspeed_wdt.c b/drivers/watchdog/aspeed_wdt.c
+index a1ea4c2..6ad727b 100644
+--- a/drivers/watchdog/aspeed_wdt.c
++++ b/drivers/watchdog/aspeed_wdt.c
+@@ -46,7 +46,7 @@ MODULE_DEVICE_TABLE(of, aspeed_wdt_of_table);
+ 
+ static void aspeed_wdt_enable(struct aspeed_wdt *wdt, int count)
+ {
+-	u32 ctrl = WDT_CTRL_RESET_MODE_SOC | WDT_CTRL_RESET_SYSTEM |
++	u32 ctrl = WDT_CTRL_RESET_MODE_FULL_CHIP | WDT_CTRL_RESET_SYSTEM |
+ 		WDT_CTRL_ENABLE;
+ 
+ 	writel(0, wdt->base + WDT_CTRL);
+@@ -176,7 +176,7 @@ static int aspeed_wdt_probe(struct platform_device *pdev)
+ 	wdt->wdd.info = &aspeed_wdt_info;
+ 	wdt->wdd.ops = &aspeed_wdt_ops;
+ 	wdt->wdd.min_timeout = 1;
+-	wdt->wdd.max_timeout = 0x10000000U / wdt->rate;
++	wdt->wdd.max_timeout = 0x10000000U / wdt->rate * 10;
+ 
+ 	/*
+ 	 * If 'timeout-sec' unspecified in devicetree, assume a 30 second

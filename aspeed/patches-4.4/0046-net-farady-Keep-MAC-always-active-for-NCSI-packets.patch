@@ -1,0 +1,55 @@
+From 9371b4d2b4f14e266b09ee8e39e6f60d4db31061 Mon Sep 17 00:00:00 2001
+From: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Date: Mon, 9 May 2016 11:47:18 +1000
+Subject: [PATCH 46/56] net/farady: Keep MAC always active for NCSI packets
+
+The status of MAC and NCSI interface are sychronized. When NCSI
+interface is down, the MAC is brought down. It means the NCSI
+packets (especially AEN packets) cannot be received by the MAC's
+driver even they're transmitted by far end. It causes one issue:
+the ethernet cable is unplugged initially and system boots up
+with down NCSI interface. The MAC stops receiving any ingress
+traffic including NCSI packets. At later point, one NCSI (AEN)
+packet is sent from far end when the ethernet cable is plugged.
+We're going to miss the AEN on local end and the interface has
+to be down for ever.
+
+This keeps the receive/transmit buffer, IRQ and NAPI are always
+enabled so that we won't miss any NCSI packets even the interrupt
+is currently in link down state.
+
+Signed-off-by: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ drivers/net/ethernet/faraday/ftgmac100.c | 15 +++------------
+ 1 file changed, 3 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/net/ethernet/faraday/ftgmac100.c b/drivers/net/ethernet/faraday/ftgmac100.c
+index 87ddc97..7eae197 100644
+--- a/drivers/net/ethernet/faraday/ftgmac100.c
++++ b/drivers/net/ethernet/faraday/ftgmac100.c
+@@ -1320,18 +1320,9 @@ static const struct net_device_ops ftgmac100_netdev_ops = {
+ 
+ static void ftgmac100_ncsi_handler(struct ncsi_dev *nd)
+ {
+-	struct net_device *netdev = nd->nd_dev;
+-
+-	if (nd->nd_state != ncsi_dev_state_functional)
+-		return;
+-
+-	if (nd->nd_link_up) {
+-		pr_info("NCSI dev is up\n");
+-		netif_start_queue(netdev);
+-	} else {
+-		pr_info("NCSI dev is down\n");
+-		ftgmac100_stop_dev(netdev);
+-	}
++	if (nd->nd_state == ncsi_dev_state_functional)
++		pr_info("NCSI interface %s\n",
++			nd->nd_link_up ? "up" : "down");
+ }
+ /******************************************************************************
+  * struct platform_driver functions
+-- 
+1.9.1
+

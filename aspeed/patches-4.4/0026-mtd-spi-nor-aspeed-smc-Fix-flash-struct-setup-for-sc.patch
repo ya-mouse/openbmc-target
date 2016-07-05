@@ -1,0 +1,41 @@
+From aeb4718beca0d07ff232341cdd544008e17f1fdc Mon Sep 17 00:00:00 2001
+From: "Milton D. Miller II" <miltonm@us.ibm.com>
+Date: Thu, 24 Mar 2016 15:43:52 -0500
+Subject: [PATCH 26/56] mtd: spi-nor: aspeed-smc: Fix flash struct setup for
+ scan
+
+Two updates to the spi-nor drivers between 4.3 and 4.4 were missed
+in the aspeed-smc rebase.
+
+The mtd->priv field is now filled out by the common layer so that
+can be dropped.  And the new flash_node driver was added and needs
+to be set to the child flash node.
+
+Not having this set changed the behavior of spi_nor_scan to follow
+the not-in-device-tree path and defaulting to FAST_READ support.
+The flash chip was programmed for FAST_READ but the driver was not
+expecting it, and the additonal 8 bits of data caused all flash
+data reads to be shifted 1 byte.
+
+Signed-off-by: Milton Miller <miltonm@us.ibm.com>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ drivers/mtd/spi-nor/aspeed-smc.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/mtd/spi-nor/aspeed-smc.c b/drivers/mtd/spi-nor/aspeed-smc.c
+index 42e5ffb..ed55f28 100644
+--- a/drivers/mtd/spi-nor/aspeed-smc.c
++++ b/drivers/mtd/spi-nor/aspeed-smc.c
+@@ -504,7 +504,7 @@ static int aspeed_smc_probe(struct platform_device *dev)
+ 
+ 		chip->nor.dev = &cdev->dev;
+ 		chip->nor.priv = chip;
+-		chip->nor.mtd.priv = &chip->nor; /* should be in spi_nor_scan()!! */
++		chip->nor.flash_node = child;
+ 		chip->nor.mtd.name = of_get_property(child, "label", NULL);
+ 		chip->nor.erase = aspeed_smc_erase;
+ 		chip->nor.read = aspeed_smc_read_user;
+-- 
+1.9.1
+

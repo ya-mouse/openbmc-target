@@ -1,0 +1,52 @@
+From 6717e8fec2bd33075395fe81016cfedeacd0ce41 Mon Sep 17 00:00:00 2001
+From: Andrew Jeffery <andrew@aj.id.au>
+Date: Fri, 20 May 2016 16:59:20 +0930
+Subject: [PATCH 53/56] aspeed_defconfig: Enable SHMEM and TMPFS
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Without enabling these options we get strange behaviour under qemu,
+where it appears uevents aren't generated to create device nodes for
+ttyS{0,4,5}. As a consequence we don't receive a getty on the console.
+
+Cédric narrowed down the list of options initially at [1],
+and with a patch to the qemu timer model[2] we can retain the
+CONFIG_NO_HZ_IDLE=y configuration.
+
+[1] https://github.com/openbmc/qemu/issues/4
+[2] https://lists.ozlabs.org/pipermail/openbmc/2016-May/003209.html
+
+Cc: Cédric Le Goater <clg@kaod.org>
+Signed-off-by: Andrew Jeffery <andrew@aj.id.au>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ arch/arm/configs/aspeed_defconfig | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/configs/aspeed_defconfig b/arch/arm/configs/aspeed_defconfig
+index 53c57d9..dbb8e6b 100644
+--- a/arch/arm/configs/aspeed_defconfig
++++ b/arch/arm/configs/aspeed_defconfig
+@@ -13,7 +13,7 @@ CONFIG_BLK_DEV_INITRD=y
+ # CONFIG_RD_LZ4 is not set
+ CONFIG_CC_OPTIMIZE_FOR_SIZE=y
+ CONFIG_BPF_SYSCALL=y
+-# CONFIG_SHMEM is not set
++CONFIG_SHMEM=y
+ # CONFIG_AIO is not set
+ CONFIG_EMBEDDED=y
+ # CONFIG_COMPAT_BRK is not set
+@@ -127,6 +127,9 @@ CONFIG_FIRMWARE_MEMMAP=y
+ CONFIG_FANOTIFY=y
+ CONFIG_OVERLAY_FS=y
+ CONFIG_CONFIGFS_FS=y
++CONFIG_TMPFS=y
++CONFIG_TMPFS_POSIX_ACL=y
++CONFIG_TMPFS_XATTR=y
+ CONFIG_JFFS2_FS=y
+ CONFIG_JFFS2_SUMMARY=y
+ CONFIG_NFS_FS=y
+-- 
+1.9.1
+

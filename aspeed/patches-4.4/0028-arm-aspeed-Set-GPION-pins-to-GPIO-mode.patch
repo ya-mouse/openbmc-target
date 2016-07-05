@@ -1,0 +1,48 @@
+From 3e1f620036e3d4a5f6bc793049c1748e33a8895b Mon Sep 17 00:00:00 2001
+From: Joel Stanley <joel@jms.id.au>
+Date: Tue, 29 Mar 2016 15:01:33 +1030
+Subject: [PATCH 28/56] arm/aspeed: Set GPION pins to GPIO mode
+
+GPION must be set to GPIO mode (SCU88[0:7] = 0) on Barreleye so they can
+be used to read the PCIe inventory status.
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ arch/arm/mach-aspeed/aspeed.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/mach-aspeed/aspeed.c b/arch/arm/mach-aspeed/aspeed.c
+index f7e9894..8115fb6 100644
+--- a/arch/arm/mach-aspeed/aspeed.c
++++ b/arch/arm/mach-aspeed/aspeed.c
+@@ -118,7 +118,6 @@ static void __init do_common_setup(void)
+ 	/* SCU setup */
+ 	writel(0x01C000FF, AST_IO(AST_BASE_SCU | 0x88));
+ 	writel(0xC1C000FF, AST_IO(AST_BASE_SCU | 0x8c));
+-	writel(0x01C0007F, AST_IO(AST_BASE_SCU | 0x88));
+ 	writel(0x003FA008, AST_IO(AST_BASE_SCU | 0x90));
+ 
+ 	/* Setup scratch registers */
+@@ -140,6 +139,9 @@ static void __init do_barreleye_setup(void)
+ 	writel(0x9E82FCE7, AST_IO(AST_BASE_GPIO | 0x00));
+ 	writel(0x0370E677, AST_IO(AST_BASE_GPIO | 0x04));
+ 
++	/* SCU setup */
++	writel(0x01C00000, AST_IO(AST_BASE_SCU | 0x88));
++
+ 	/*
+ 	 * Do read/modify/write on power gpio to prevent resetting power on
+ 	 * reboot
+@@ -164,6 +166,9 @@ static void __init do_palmetto_setup(void)
+ 	writel(0x0370E677, AST_IO(AST_BASE_GPIO | 0x04));
+ 	writel(0xDF48F7FF, AST_IO(AST_BASE_GPIO | 0x20));
+ 	writel(0xC738F202, AST_IO(AST_BASE_GPIO | 0x24));
++
++	/* SCU setup */
++	writel(0x01C0007F, AST_IO(AST_BASE_SCU | 0x88));
+ }
+ 
+ #define SCU_PASSWORD	0x1688A8A8
+-- 
+1.9.1
+

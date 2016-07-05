@@ -1,0 +1,58 @@
+From 4dbfab2f3c9167e8f40df6a4805b2b4eab673c47 Mon Sep 17 00:00:00 2001
+From: Ken <ken.sk.lai@mail.foxconn.com>
+Date: Wed, 18 May 2016 16:06:59 +0800
+Subject: [PATCH 54/56] arm/aspeed: Add debounce for power button
+
+This configures GPIOE0, which is BMC_PWBTN_IN_N, to be debounced. It
+uses timer 3 for 480000 cycles, which with a pclk of 24MHz is 20
+milliseconds.
+
+  384MHz for H-PLL (HW strapping)
+
+  PCLK = H-PLL/16=24MHz (SCU08, bit25:23)
+
+Debounce timer value = debounce time / PCLK cycle time:
+
+  20ms*24000000/1000=480000(DEC)=0x75300(HEX)
+
+Signed-off-by: Ken Liu <ken.th.liu@foxconn.com>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ arch/arm/mach-aspeed/aspeed.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+ mode change 100644 => 100755 arch/arm/mach-aspeed/aspeed.c
+
+diff --git a/arch/arm/mach-aspeed/aspeed.c b/arch/arm/mach-aspeed/aspeed.c
+old mode 100644
+new mode 100755
+index 18aefdb..11d8a61
+--- a/arch/arm/mach-aspeed/aspeed.c
++++ b/arch/arm/mach-aspeed/aspeed.c
+@@ -142,6 +142,9 @@ static void __init do_barreleye_setup(void)
+ 	/* SCU setup */
+ 	writel(0x01C00000, AST_IO(AST_BASE_SCU | 0x88));
+ 
++	/* To enable GPIOE0 pass through function debounce mode */
++	writel(0x010FFFFF, AST_IO(AST_BASE_SCU | 0xA8));
++
+ 	/*
+ 	 * Do read/modify/write on power gpio to prevent resetting power on
+ 	 * reboot
+@@ -151,6 +154,14 @@ static void __init do_barreleye_setup(void)
+ 	writel(reg, AST_IO(AST_BASE_GPIO | 0x20));
+ 	writel(0xC738F20A, AST_IO(AST_BASE_GPIO | 0x24));
+ 	writel(0x0031FFAF, AST_IO(AST_BASE_GPIO | 0x80));
++
++	/* Select TIMER3 as debounce timer */
++	writel(0x00000001, AST_IO(AST_BASE_GPIO | 0x48));
++	writel(0x00000001, AST_IO(AST_BASE_GPIO | 0x4C));
++
++	/* Set debounce timer to 480000 cycles, with a pclk of 24MHz,
++	 * corresponds to 20 ms. This time was found by experimentation */
++	writel(0x00075300, AST_IO(AST_BASE_GPIO | 0x58));
+ }
+ 
+ static void __init do_palmetto_setup(void)
+-- 
+1.9.1
+

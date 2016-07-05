@@ -1,0 +1,27 @@
+From 8fe2e68517d089bcae1282b74d3edbd1d8cfb8b9 Mon Sep 17 00:00:00 2001
+From: Jeremy Kerr <jk@ozlabs.org>
+Date: Wed, 4 Nov 2015 16:15:04 +0800
+Subject: [PATCH 09/56] i2c: Don't print in i2c_device_uevent
+
+CONFIG_I2C_DEBUG_CORE + systemd-journald = infinite loop
+
+Signed-off-by: Jeremy Kerr <jk@ozlabs.org>
+---
+ drivers/i2c/i2c-core.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/i2c/i2c-core.c b/drivers/i2c/i2c-core.c
+index ba8eb08..b9943da 100644
+--- a/drivers/i2c/i2c-core.c
++++ b/drivers/i2c/i2c-core.c
+@@ -537,7 +537,6 @@ static int i2c_device_uevent(struct device *dev, struct kobj_uevent_env *env)
+ 	if (add_uevent_var(env, "MODALIAS=%s%s",
+ 			   I2C_MODULE_PREFIX, client->name))
+ 		return -ENOMEM;
+-	dev_dbg(dev, "uevent\n");
+ 	return 0;
+ }
+ 
+-- 
+1.9.1
+

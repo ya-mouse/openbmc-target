@@ -1,0 +1,28 @@
+From fcc6ce90e42ee2d43decf15778616a26a80a5b0c Mon Sep 17 00:00:00 2001
+From: Joel Stanley <joel@jms.id.au>
+Date: Wed, 11 May 2016 14:49:51 +0930
+Subject: [PATCH 48/56] arm/configs/aspeed: Add adm1275 hwmon device
+
+Bareleye uses these devices.
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ arch/arm/configs/aspeed_defconfig | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/arm/configs/aspeed_defconfig b/arch/arm/configs/aspeed_defconfig
+index 974e238..53c57d9 100644
+--- a/arch/arm/configs/aspeed_defconfig
++++ b/arch/arm/configs/aspeed_defconfig
+@@ -107,6 +107,8 @@ CONFIG_I2C_CHARDEV=y
+ CONFIG_I2C_SLAVE_EEPROM=y
+ CONFIG_GPIO_ASPEED=y
+ CONFIG_SENSORS_POWER8_OCC_I2C=y
++CONFIG_PMBUS=y
++CONFIG_SENSORS_ADM1275=y
+ CONFIG_SENSORS_TMP421=y
+ CONFIG_WATCHDOG=y
+ CONFIG_ASPEED_24xx_WATCHDOG=y
+-- 
+1.9.1
+

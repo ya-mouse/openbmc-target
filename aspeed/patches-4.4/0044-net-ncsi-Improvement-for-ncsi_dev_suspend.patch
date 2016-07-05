@@ -1,0 +1,52 @@
+From 2f6ee36ac709d44ddf8e05185b96c7332dde63ad Mon Sep 17 00:00:00 2001
+From: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Date: Mon, 9 May 2016 11:47:17 +1000
+Subject: [PATCH 44/56] net/ncsi: Improvement for ncsi_dev_suspend()
+
+The function is used to deconfigure current active channel so that
+we can pick another available channel as active. At end of it, the
+all available packages and channels are purged. It's not correct.
+Also, the new active channel should be finalized before configuring
+it using ncsi_dev_config().
+
+This improves the function from above two aspects.
+
+Signed-off-by: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ net/ncsi/ncsi-manage.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/net/ncsi/ncsi-manage.c b/net/ncsi/ncsi-manage.c
+index 9ed51f2..48575d2 100644
+--- a/net/ncsi/ncsi-manage.c
++++ b/net/ncsi/ncsi-manage.c
+@@ -686,7 +686,7 @@ error:
+ static void ncsi_dev_suspend(struct ncsi_dev_priv *ndp)
+ {
+ 	struct ncsi_dev *nd = &ndp->ndp_ndev;
+-	struct ncsi_package *np, *tmp;
++	struct ncsi_package *np;
+ 	struct ncsi_channel *nc;
+ 	struct ncsi_cmd_arg nca;
+ 	int ret;
+@@ -740,12 +740,11 @@ static void ncsi_dev_suspend(struct ncsi_dev_priv *ndp)
+ 		break;
+ 	case ncsi_dev_state_suspend_done:
+ done:
+-		spin_lock(&ndp->ndp_package_lock);
+-		list_for_each_entry_safe(np, tmp, &ndp->ndp_packages, np_node)
+-			ncsi_release_package(np);
+-		spin_unlock(&ndp->ndp_package_lock);
++		if (ndp->ndp_flags & NCSI_DEV_PRIV_FLAG_CHANGE_ACTIVE)
++			ncsi_choose_active_channel(ndp);
+ 
+-		if (!(ndp->ndp_flags & NCSI_DEV_PRIV_FLAG_CHANGE_ACTIVE)) {
++		if (!(ndp->ndp_flags & NCSI_DEV_PRIV_FLAG_CHANGE_ACTIVE) ||
++		    !ndp->ndp_active_channel) {
+ 			nd->nd_state = ncsi_dev_state_functional;
+ 			nd->nd_link_up = 0;
+ 			nd->nd_handler(nd);
+-- 
+1.9.1
+

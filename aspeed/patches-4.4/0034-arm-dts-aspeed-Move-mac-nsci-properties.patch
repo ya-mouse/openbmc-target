@@ -1,0 +1,64 @@
+From 0555c85c8e2a2dbb6ca753347e86955d659ae17f Mon Sep 17 00:00:00 2001
+From: Joel Stanley <joel@jms.id.au>
+Date: Thu, 5 May 2016 11:27:12 +1000
+Subject: [PATCH 34/56] arm/dts/aspeed: Move mac nsci properties
+
+We have boards that don't use nsci, so make this specific to the
+palmetto and barreleyes.
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+Signed-off-by: Cyril Bur <cyrilbur@gmail.com>
+---
+ arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts | 5 +++++
+ arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts  | 5 +++++
+ arch/arm/boot/dts/ast2400.dtsi                 | 2 --
+ 3 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts b/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+index 143292b6..a06252a 100644
+--- a/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
++++ b/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+@@ -7,6 +7,11 @@
+ 	model = "Barrelye BMC";
+ 	compatible = "rackspace,barreleye-bmc", "aspeed,ast2400";
+ 	ahb {
++		mac0: ethernet@1e660000 {
++			use-nc-si;
++			no-hw-checksum;
++		};
++
+ 		fmc@1e620000 {
+ 			reg = < 0x1e620000 0x94
+ 				0x20000000 0x02000000 >;
+diff --git a/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts b/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
+index c78a2f5..cde194e 100644
+--- a/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
++++ b/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
+@@ -8,6 +8,11 @@
+ 	compatible = "tyan,palmetto-bmc", "aspeed,ast2400";
+ 
+ 	ahb {
++		mac0: ethernet@1e660000 {
++			use-nc-si;
++			no-hw-checksum;
++		};
++
+ 		fmc@1e620000 {
+ 			reg = < 0x1e620000 0x94
+ 				0x20000000 0x02000000 >;
+diff --git a/arch/arm/boot/dts/ast2400.dtsi b/arch/arm/boot/dts/ast2400.dtsi
+index 49516fd..e1100f0 100644
+--- a/arch/arm/boot/dts/ast2400.dtsi
++++ b/arch/arm/boot/dts/ast2400.dtsi
+@@ -69,8 +69,6 @@
+ 			compatible = "faraday,ftgmac100", "aspeed,ast2400-mac";
+ 			reg = <0x1e660000 0x180>;
+ 			interrupts = <2>;
+-			use-nc-si;
+-			no-hw-checksum;
+ 		};
+ 
+ 		apb {
+-- 
+1.9.1
+

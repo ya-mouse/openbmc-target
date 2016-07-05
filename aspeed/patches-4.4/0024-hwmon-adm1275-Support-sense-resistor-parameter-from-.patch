@@ -1,0 +1,83 @@
+From dd13a2c59d1221f8dd7ca3eb61b587a652c32d8f Mon Sep 17 00:00:00 2001
+From: Joel Stanley <joel@jms.id.au>
+Date: Mon, 21 Mar 2016 21:31:08 +1030
+Subject: [PATCH 24/56] hwmon/adm1275: Support sense resistor parameter from dt
+
+Allow a system to specify the value of an external sense resistor in the
+device tree.
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ Documentation/devicetree/bindings/hwmon/adm1275.txt | 19 +++++++++++++++++++
+ drivers/hwmon/pmbus/adm1275.c                       | 11 +++++++++--
+ 2 files changed, 28 insertions(+), 2 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/hwmon/adm1275.txt
+
+diff --git a/Documentation/devicetree/bindings/hwmon/adm1275.txt b/Documentation/devicetree/bindings/hwmon/adm1275.txt
+new file mode 100644
+index 0000000..abfba34
+--- /dev/null
++++ b/Documentation/devicetree/bindings/hwmon/adm1275.txt
+@@ -0,0 +1,19 @@
++adm1275 temperature sensor
++--------------------------
++
++Required property:
++
++ - compatible: "adi,adm1278"
++ - reg: i2c device address 
++
++Optional property:
++
++- sense-resistor: external sense resistor value in milliOhms
++
++Example:
++
++sensor { 
++	reg = <0x11>;
++	compatible = "adi,adm1278";
++	sense-resistor = < 100 >
++}
+diff --git a/drivers/hwmon/pmbus/adm1275.c b/drivers/hwmon/pmbus/adm1275.c
+index 1476a12..a5534e4 100644
+--- a/drivers/hwmon/pmbus/adm1275.c
++++ b/drivers/hwmon/pmbus/adm1275.c
+@@ -364,6 +364,7 @@ static int adm1275_probe(struct i2c_client *client,
+ 	u8 block_buffer[I2C_SMBUS_BLOCK_MAX + 1];
+ 	int config, device_config;
+ 	int ret;
++	u32 r_sense = 1;
+ 	struct pmbus_driver_info *info;
+ 	struct adm1275_data *data;
+ 	const struct i2c_device_id *mid;
+@@ -418,6 +419,12 @@ static int adm1275_probe(struct i2c_client *client,
+ 	if (!data)
+ 		return -ENOMEM;
+ 
++	ret = of_property_read_u32(client->dev.of_node, "sense-resistor",
++			&r_sense);
++	if (!ret)
++		dev_notice(&client->dev, "using r_sense from dt %d\n",
++				r_sense);
++
+ 	data->id = mid->driver_data;
+ 
+ 	info = &data->info;
+@@ -591,12 +598,12 @@ static int adm1275_probe(struct i2c_client *client,
+ 		info->R[PSC_VOLTAGE_OUT] = coefficients[voindex].R;
+ 	}
+ 	if (cindex >= 0) {
+-		info->m[PSC_CURRENT_OUT] = coefficients[cindex].m;
++		info->m[PSC_CURRENT_OUT] = coefficients[cindex].m * r_sense;
+ 		info->b[PSC_CURRENT_OUT] = coefficients[cindex].b;
+ 		info->R[PSC_CURRENT_OUT] = coefficients[cindex].R;
+ 	}
+ 	if (pindex >= 0) {
+-		info->m[PSC_POWER] = coefficients[pindex].m;
++		info->m[PSC_POWER] = coefficients[pindex].m * r_sense;
+ 		info->b[PSC_POWER] = coefficients[pindex].b;
+ 		info->R[PSC_POWER] = coefficients[pindex].R;
+ 	}
+-- 
+1.9.1
+

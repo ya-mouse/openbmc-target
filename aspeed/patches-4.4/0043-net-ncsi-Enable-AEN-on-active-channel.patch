@@ -1,0 +1,58 @@
+From 227e539738dca53eac37f5c39cec2735c1a06fb0 Mon Sep 17 00:00:00 2001
+From: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Date: Mon, 9 May 2016 11:47:16 +1000
+Subject: [PATCH 43/56] net/ncsi: Enable AEN on active channel
+
+NCSI AEN packets are transmitted by far end to notify the network
+status change. We had the wrong assumption that the functionality
+is enabled in far end by default.
+
+This transmits a AEN enablement packet when configuring the active
+channel.
+
+Signed-off-by: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ net/ncsi/internal.h    | 1 +
+ net/ncsi/ncsi-manage.c | 6 ++++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/net/ncsi/internal.h b/net/ncsi/internal.h
+index cc37d9b..2525229 100644
+--- a/net/ncsi/internal.h
++++ b/net/ncsi/internal.h
+@@ -64,6 +64,7 @@ enum {
+ 	ncsi_dev_state_config_ebf,
+ 	ncsi_dev_state_config_ecnt,
+ 	ncsi_dev_state_config_ec,
++	ncsi_dev_state_config_ae,
+ 	ncsi_dev_state_config_gls,
+ 	ncsi_dev_state_config_done,
+ 	ncsi_dev_state_suspend_select	= 0x0401,
+diff --git a/net/ncsi/ncsi-manage.c b/net/ncsi/ncsi-manage.c
+index 05619f8..9ed51f2 100644
+--- a/net/ncsi/ncsi-manage.c
++++ b/net/ncsi/ncsi-manage.c
+@@ -421,6 +421,7 @@ static void ncsi_dev_config(struct ncsi_dev_priv *ndp)
+ 	case ncsi_dev_state_config_ebf:
+ 	case ncsi_dev_state_config_ecnt:
+ 	case ncsi_dev_state_config_ec:
++	case ncsi_dev_state_config_ae:
+ 	case ncsi_dev_state_config_gls:
+ 		atomic_set(&ndp->ndp_pending_reqs, 1);
+ 
+@@ -447,6 +448,11 @@ static void ncsi_dev_config(struct ncsi_dev_priv *ndp)
+ 			nd->nd_state = ncsi_dev_state_config_ec;
+ 		} else if (nd->nd_state == ncsi_dev_state_config_ec) {
+ 			nca.nca_type = NCSI_PKT_CMD_EC;
++			nd->nd_state = ncsi_dev_state_config_ae;
++		} else if (nd->nd_state == ncsi_dev_state_config_ae) {
++			nca.nca_type = NCSI_PKT_CMD_AE;
++			nca.nca_bytes[0] = 0;
++			nca.nca_dwords[1] = 0x7;
+ 			nd->nd_state = ncsi_dev_state_config_gls;
+ 		} else if (nd->nd_state == ncsi_dev_state_config_gls) {
+ 			nca.nca_type = NCSI_PKT_CMD_GLS;
+-- 
+1.9.1
+

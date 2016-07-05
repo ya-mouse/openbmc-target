@@ -1,0 +1,30 @@
+From d72df6916378f0dc4c4d06d745637e7bcceab6f7 Mon Sep 17 00:00:00 2001
+From: Joel Stanley <joel@jms.id.au>
+Date: Tue, 29 Mar 2016 15:00:04 +1030
+Subject: [PATCH 27/56] arm/aspeed: Set GPIOC pins to GPIO mode
+
+GPIOC4, GPIOC5 and GPIOC6 are FUNC_MODE{0,1,2}. These nets are connected
+to the Ethernet phy, and to ensure correct operation they all need to be
+in GPIO mode (SCU90[0] = 1) and then pulled down.
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ arch/arm/mach-aspeed/aspeed.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm/mach-aspeed/aspeed.c b/arch/arm/mach-aspeed/aspeed.c
+index f3180fc..f7e9894 100644
+--- a/arch/arm/mach-aspeed/aspeed.c
++++ b/arch/arm/mach-aspeed/aspeed.c
+@@ -119,7 +119,7 @@ static void __init do_common_setup(void)
+ 	writel(0x01C000FF, AST_IO(AST_BASE_SCU | 0x88));
+ 	writel(0xC1C000FF, AST_IO(AST_BASE_SCU | 0x8c));
+ 	writel(0x01C0007F, AST_IO(AST_BASE_SCU | 0x88));
+-	writel(0x003FA009, AST_IO(AST_BASE_SCU | 0x90));
++	writel(0x003FA008, AST_IO(AST_BASE_SCU | 0x90));
+ 
+ 	/* Setup scratch registers */
+ 	writel(0x00000042, AST_IO(AST_BASE_LPC | 0x170));
+-- 
+1.9.1
+

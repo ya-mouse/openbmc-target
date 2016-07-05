@@ -1,0 +1,33 @@
+From 9fb81fcbe7fd1acca4e52cd6725d37de1a91ea9f Mon Sep 17 00:00:00 2001
+From: Joel Stanley <joel@jms.id.au>
+Date: Mon, 18 May 2015 12:00:57 +0930
+Subject: [PATCH 02/56] arm: ast2400.h was not being included due to this
+
+TODO: Fix it properly
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ arch/arm/Makefile | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/arch/arm/Makefile b/arch/arm/Makefile
+index 299cc13..69bd768 100644
+--- a/arch/arm/Makefile
++++ b/arch/arm/Makefile
+@@ -259,13 +259,11 @@ endif
+ machdirs := $(patsubst %,arch/arm/mach-%/,$(machine-y))
+ platdirs := $(patsubst %,arch/arm/plat-%/,$(sort $(plat-y)))
+ 
+-ifneq ($(CONFIG_ARCH_MULTIPLATFORM),y)
+ ifeq ($(KBUILD_SRC),)
+ KBUILD_CPPFLAGS += $(patsubst %,-I%include,$(machdirs) $(platdirs))
+ else
+ KBUILD_CPPFLAGS += $(patsubst %,-I$(srctree)/%include,$(machdirs) $(platdirs))
+ endif
+-endif
+ 
+ export	TEXT_OFFSET GZFLAGS MMUEXT
+ 
+-- 
+1.9.1
+

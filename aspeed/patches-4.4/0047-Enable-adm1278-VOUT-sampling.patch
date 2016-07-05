@@ -1,0 +1,42 @@
+From 5911270d537dc6c2becc7ec414aa963504e94232 Mon Sep 17 00:00:00 2001
+From: Yi Li <adamliyi@msn.com>
+Date: Wed, 11 May 2016 11:55:53 +0800
+Subject: [PATCH 47/56] Enable adm1278 VOUT sampling
+
+The reset value of ADM1278 PMON_CONFIG register does not enable VOUT sampling.
+This patch enables VOUT sampling in ADM1278 PMON_CONFIG register.
+
+The patch fixes issue: https://github.com/openbmc/linux/issues/71.
+
+Signed-off-by: Yi Li <adamliyi@msn.com>
+---
+ drivers/hwmon/pmbus/adm1275.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/drivers/hwmon/pmbus/adm1275.c b/drivers/hwmon/pmbus/adm1275.c
+index 1476a12..006b1ef 100644
+--- a/drivers/hwmon/pmbus/adm1275.c
++++ b/drivers/hwmon/pmbus/adm1275.c
+@@ -514,6 +514,19 @@ static int adm1275_probe(struct i2c_client *client,
+ 		tindex = 3;
+ 
+ 		info->func[0] |= PMBUS_HAVE_PIN | PMBUS_HAVE_STATUS_INPUT;
++
++		/* By default when reset VOUT is not enabled */
++		if (!(config & ADM1278_VOUT_EN)) {
++			config |= ADM1278_VOUT_EN;
++			ret = i2c_smbus_write_byte_data(client,
++					ADM1275_PMON_CONFIG, (u8)config);
++			if (ret < 0) {
++				dev_err(&client->dev,
++					"Fail to write ADM1275_PMON_CONFIG\n");
++				return ret;
++			}
++		}
++
+ 		if (config & ADM1278_TEMP1_EN)
+ 			info->func[0] |=
+ 				PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP;
+-- 
+1.9.1
+

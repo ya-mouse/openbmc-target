@@ -1,0 +1,29 @@
+From 60748dffe945b03ac2cc3034895ce1ace3b53073 Mon Sep 17 00:00:00 2001
+From: Joel Stanley <joel@jms.id.au>
+Date: Mon, 21 Mar 2016 22:04:14 +1030
+Subject: [PATCH 22/56] arm/boot: Build all apseed dtbs
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ arch/arm/boot/dts/Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
+index b4bae62..aa4daf2 100644
+--- a/arch/arm/boot/dts/Makefile
++++ b/arch/arm/boot/dts/Makefile
+@@ -777,7 +777,10 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += \
+ 	mt8127-moose.dtb \
+ 	mt8135-evbp1.dtb
+ dtb-$(CONFIG_ARCH_ZX) += zx296702-ad1.dtb
+-dtb-$(CONFIG_MACH_OPP_PALMETTO_BMC) += aspeed-bmc-opp-palmetto.dtb
++dtb-$(CONFIG_MACH_OPP_PALMETTO_BMC) += \
++	aspeed-bmc-opp-palmetto.dtb \
++	aspeed-bmc-opp-barreleye.dtb \
++	aspeed-bmc-opp-firestone.dtb
+ endif
+ 
+ dtstree		:= $(srctree)/$(src)
+-- 
+1.9.1
+

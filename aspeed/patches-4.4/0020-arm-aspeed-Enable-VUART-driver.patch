@@ -1,0 +1,71 @@
+From 271462b84385ba270690a40bc9ebc32dea6db020 Mon Sep 17 00:00:00 2001
+From: Jeremy Kerr <jk@ozlabs.org>
+Date: Fri, 29 Jan 2016 12:55:48 +0800
+Subject: [PATCH 20/56] arm/aspeed: Enable VUART driver
+
+This change makes use of the new VUART device driver. We need a separate
+compatible property for the VUART node, and a fix for the interrupt
+definitions. We also change the SCU setup to notify host firmware that the
+VUART is available.
+
+Signed-off-by: Jeremy Kerr <jk@ozlabs.org>
+---
+ arch/arm/boot/dts/ast2400.dtsi    | 7 ++++---
+ arch/arm/configs/aspeed_defconfig | 3 +++
+ arch/arm/mach-aspeed/aspeed.c     | 2 +-
+ 3 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/arch/arm/boot/dts/ast2400.dtsi b/arch/arm/boot/dts/ast2400.dtsi
+index 0f008bb..49516fd 100644
+--- a/arch/arm/boot/dts/ast2400.dtsi
++++ b/arch/arm/boot/dts/ast2400.dtsi
+@@ -344,15 +344,16 @@
+ 			};
+ #endif
+ 
+-			uart6: serial@1e787000 {
+-			       compatible = "ns16550a";
++			uart6: vuart@1e787000 {
++			       compatible = "aspeed,vuart";
+ 			       reg = <0x1e787000 0x1000>;
+ 			       reg-shift = <2>;
+-			       interrupts = <10>;
++			       interrupts = <8>;
+ 			       clock-frequency = < 1843200 >;
+ 			       current-speed = < 38400 >;
+ 			       no-loopback-test;
+ 			};
++
+ 		};
+ 	};
+ };
+diff --git a/arch/arm/configs/aspeed_defconfig b/arch/arm/configs/aspeed_defconfig
+index 2cc3dfd..974e238 100644
+--- a/arch/arm/configs/aspeed_defconfig
++++ b/arch/arm/configs/aspeed_defconfig
+@@ -97,6 +97,9 @@ CONFIG_SERIAL_8250=y
+ CONFIG_SERIAL_8250_CONSOLE=y
+ CONFIG_SERIAL_8250_NR_UARTS=6
+ CONFIG_SERIAL_8250_RUNTIME_UARTS=6
++CONFIG_SERIAL_8250_EXTENDED=y
++CONFIG_SERIAL_8250_SHARE_IRQ=y
++CONFIG_SERIAL_ASPEED_VUART=y
+ CONFIG_SERIAL_OF_PLATFORM=y
+ CONFIG_HW_RANDOM=y
+ CONFIG_I2C=y
+diff --git a/arch/arm/mach-aspeed/aspeed.c b/arch/arm/mach-aspeed/aspeed.c
+index e852489..f3180fc 100644
+--- a/arch/arm/mach-aspeed/aspeed.c
++++ b/arch/arm/mach-aspeed/aspeed.c
+@@ -123,7 +123,7 @@ static void __init do_common_setup(void)
+ 
+ 	/* Setup scratch registers */
+ 	writel(0x00000042, AST_IO(AST_BASE_LPC | 0x170));
+-	writel(0x00004000, AST_IO(AST_BASE_LPC | 0x174));
++	writel(0x00008000, AST_IO(AST_BASE_LPC | 0x174));
+ }
+ 
+ static void __init do_barreleye_setup(void)
+-- 
+1.9.1
+

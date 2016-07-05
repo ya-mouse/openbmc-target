@@ -1,0 +1,75 @@
+From 8baa5d95ca158fbb84df3ff3fa25bd0b61885e9b Mon Sep 17 00:00:00 2001
+From: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Date: Mon, 9 May 2016 11:47:15 +1000
+Subject: [PATCH 42/56] net/ncsi: Remove ncsi_stop_dev()
+
+This drops API ncsi_stop_dev() as it does nothing.
+
+Signed-off-by: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ drivers/net/ethernet/faraday/ftgmac100.c | 6 ------
+ include/net/ncsi.h                       | 6 ------
+ net/ncsi/ncsi-manage.c                   | 5 -----
+ 3 files changed, 17 deletions(-)
+
+diff --git a/drivers/net/ethernet/faraday/ftgmac100.c b/drivers/net/ethernet/faraday/ftgmac100.c
+index 2fcb7f9..87ddc97 100644
+--- a/drivers/net/ethernet/faraday/ftgmac100.c
++++ b/drivers/net/ethernet/faraday/ftgmac100.c
+@@ -1216,12 +1216,6 @@ static int ftgmac100_stop_dev(struct net_device *netdev)
+ 
+ static int ftgmac100_stop(struct net_device *netdev)
+ {
+-	struct ftgmac100 *priv = netdev_priv(netdev);
+-
+-	/* Stop NCSI device */
+-	if (priv->use_ncsi)
+-		ncsi_stop_dev(priv->ndev);
+-
+ 	return ftgmac100_stop_dev(netdev);
+ }
+ static int ftgmac100_hard_start_xmit(struct sk_buff *skb,
+diff --git a/include/net/ncsi.h b/include/net/ncsi.h
+index bf70b8d..fa50ab5 100644
+--- a/include/net/ncsi.h
++++ b/include/net/ncsi.h
+@@ -34,7 +34,6 @@ struct ncsi_dev *ncsi_register_dev(struct net_device *dev,
+ 				   void (*notifier)(struct ncsi_dev *nd));
+ int ncsi_start_dev(struct ncsi_dev *nd);
+ int ncsi_suspend_dev(struct ncsi_dev *nd);
+-void ncsi_stop_dev(struct ncsi_dev *nd);
+ void ncsi_unregister_dev(struct ncsi_dev *nd);
+ #else /* !CONFIG_NET_NCSI */
+ static inline struct ncsi_dev *ncsi_register_dev(struct net_device *dev,
+@@ -53,11 +52,6 @@ static inline int ncsi_suspend_dev(struct ncsi_dev *nd)
+ 	return -ENOTTY;
+ }
+ 
+-static inline void ncsi_stop_dev(struct ncsi_dev *nd)
+-{
+-
+-}
+-
+ void inline ncsi_unregister_dev(struct ncsi_dev *nd)
+ {
+ }
+diff --git a/net/ncsi/ncsi-manage.c b/net/ncsi/ncsi-manage.c
+index c32a919..05619f8 100644
+--- a/net/ncsi/ncsi-manage.c
++++ b/net/ncsi/ncsi-manage.c
+@@ -899,11 +899,6 @@ int ncsi_suspend_dev(struct ncsi_dev *nd)
+ }
+ EXPORT_SYMBOL_GPL(ncsi_suspend_dev);
+ 
+-void ncsi_stop_dev(struct ncsi_dev *nd)
+-{
+-}
+-EXPORT_SYMBOL_GPL(ncsi_stop_dev);
+-
+ void ncsi_unregister_dev(struct ncsi_dev *nd)
+ {
+ 	struct ncsi_dev_priv *ndp = TO_NCSI_DEV_PRIV(nd);
+-- 
+1.9.1
+

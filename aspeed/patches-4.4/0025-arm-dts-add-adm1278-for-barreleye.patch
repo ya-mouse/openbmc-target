@@ -1,0 +1,54 @@
+From f24385a1c35f94da042c0b75046efce983df0f38 Mon Sep 17 00:00:00 2001
+From: Joel Stanley <joel@jms.id.au>
+Date: Mon, 21 Mar 2016 21:59:28 +1030
+Subject: [PATCH 25/56] arm/dts: add adm1278 for barreleye
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts | 23 ++++++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts b/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+index 8a7347b..143292b6 100644
+--- a/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
++++ b/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+@@ -70,7 +70,22 @@
+ 						reg = <0x51>;
+ 					};
+ 				};
+-
++				i2c4: i2c-bus@140 {
++					adm1278@10 {
++						// P12V_a for CPU0
++						compatible = "adi,adm1278";
++						reg = <0x10>;
++						sense-resistor = <500>;
++					};
++				};
++				i2c5: i2c-bus@180 {
++					adm1278@10 {
++						// P12V_b for CPU1
++						compatible = "adi,adm1278";
++						reg = <0x10>;
++						sense-resistor = <500>;
++					};
++				};
+ 				i2c6: i2c-bus@1c0 {
+ 					nct7904@2d {
+ 						compatible = "nuvoton,nct7904";
+@@ -90,6 +105,12 @@
+ 						reg = <0x55>;
+ 						pagesize = <8>;
+ 					};
++					adm1278@10 {
++						// P12V_c for HDD and IO board
++						compatible = "adi,adm1278";
++						reg = <0x10>;
++						sense-resistor = <500>;
++					};
+ 				};
+ 			};
+ 		};
+-- 
+1.9.1
+

@@ -1,0 +1,29 @@
+From efe4fa9412459b2aade0bf56ad9f1788b61f57f2 Mon Sep 17 00:00:00 2001
+From: "Milton D. Miller II" <miltonm@us.ibm.com>
+Date: Fri, 4 Dec 2015 01:41:23 -0600
+Subject: [PATCH 03/56] of: add aspeed to vendor-prefixes
+
+ASPPED Technology Inc is a fabless IC-design company.  Their web site
+is http://www.aspeedtech.com/.
+
+Signed-off-by: Milton Miller <miltonm@us.ibm.com>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ Documentation/devicetree/bindings/vendor-prefixes.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/vendor-prefixes.txt b/Documentation/devicetree/bindings/vendor-prefixes.txt
+index 55df1d4..78d969b 100644
+--- a/Documentation/devicetree/bindings/vendor-prefixes.txt
++++ b/Documentation/devicetree/bindings/vendor-prefixes.txt
+@@ -28,6 +28,7 @@ arm	ARM Ltd.
+ armadeus	ARMadeus Systems SARL
+ artesyn	Artesyn Embedded Technologies Inc.
+ asahi-kasei	Asahi Kasei Corp.
++aspeed	ASPEED TECHNOLOGY Inc.
+ atmel	Atmel Corporation
+ auo	AU Optronics Corporation
+ avago	Avago Technologies
+-- 
+1.9.1
+

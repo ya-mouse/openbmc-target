@@ -1,0 +1,59 @@
+From 0e32abc01180be9d14b319b05f4e161e6e5ec9bc Mon Sep 17 00:00:00 2001
+From: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Date: Mon, 9 May 2016 11:47:13 +1000
+Subject: [PATCH 41/56] net/ncsi: Add NCSI_DEV_PRIV_FLAG_POPULATED
+
+This adds another flag (NCSI_DEV_PRIV_FLAG_POPULATED) to ncsi priv
+struct. When it's set, the all available packages and channels
+associated with the interface have been enumerated. The flag is
+going to be used by next patch. No functional changes introduced.
+
+Signed-off-by: Gavin Shan <gwshan@linux.vnet.ibm.com>
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+---
+ net/ncsi/internal.h | 3 ++-
+ net/ncsi/ncsi-rsp.c | 7 +++++--
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/net/ncsi/internal.h b/net/ncsi/internal.h
+index 03fd383..cc37d9b 100644
+--- a/net/ncsi/internal.h
++++ b/net/ncsi/internal.h
+@@ -76,7 +76,8 @@ enum {
+ struct ncsi_dev_priv {
+ 	struct ncsi_dev		ndp_ndev;
+ 	int			ndp_flags;
+-#define NCSI_DEV_PRIV_FLAG_CHANGE_ACTIVE	0x1
++#define NCSI_DEV_PRIV_FLAG_POPULATED		0x1
++#define NCSI_DEV_PRIV_FLAG_CHANGE_ACTIVE	0x2
+ 	struct ncsi_package	*ndp_active_package;
+ 	struct ncsi_channel	*ndp_active_channel;
+ 	atomic_t		ndp_package_num;
+diff --git a/net/ncsi/ncsi-rsp.c b/net/ncsi/ncsi-rsp.c
+index 295f0f8..c34998d 100644
+--- a/net/ncsi/ncsi-rsp.c
++++ b/net/ncsi/ncsi-rsp.c
+@@ -88,8 +88,8 @@ static int ncsi_rsp_handler_cis(struct ncsi_req *nr)
+ 
+ 	rsp = (struct ncsi_rsp_pkt *)skb_network_header(nr->nr_rsp);
+ 	ncsi_find_package_and_channel(ndp, rsp->rsp.common.channel, &np, &nc);
+-	if (!np)
+-		return -ENODEV;
++	if ((ndp->ndp_flags & NCSI_DEV_PRIV_FLAG_POPULATED) && !nc)
++		return -ENXIO;
+ 
+ 	/* Add the channel if necessary */
+ 	if (!nc)
+@@ -122,6 +122,9 @@ static int ncsi_rsp_handler_sp(struct ncsi_req *nr)
+ 	rsp = (struct ncsi_rsp_pkt *)skb_network_header(nr->nr_rsp);
+ 	ncsi_find_package_and_channel(ndp, rsp->rsp.common.channel,
+ 				      &np, NULL);
++	if ((ndp->ndp_flags & NCSI_DEV_PRIV_FLAG_POPULATED) && !np)
++		return -ENXIO;
++
+ 	if (!np) {
+ 		np = ncsi_add_package(ndp,
+ 			NCSI_PACKAGE_INDEX(rsp->rsp.common.channel));
+-- 
+1.9.1
+

@@ -1,0 +1,48 @@
+diff --git a/arch/arm/mach-aspeed/Kconfig b/arch/arm/mach-aspeed/Kconfig
+index 7941e03..4c2f8f7 100644
+--- a/arch/arm/mach-aspeed/Kconfig
++++ b/arch/arm/mach-aspeed/Kconfig
+@@ -4,7 +4,6 @@ menuconfig ARCH_ASPEED
+ 	select CLKSRC_MMIO
+ 	select GENERIC_IRQ_CHIP
+ 	select ARCH_REQUIRE_GPIOLIB
+-	select I2C_ASPEED
+ 	select PHYLIB if NETDEVICES
+ 	select MFD_SYSCON
+ 	select SRAM
+@@ -24,4 +23,14 @@ config MACH_OPP_PALMETTO_BMC
+ 	  Say Y here if you intend to run this kernel on the BMC
+ 	  of an OpenPower "Palmetto" eval board
+ 
++config MACH_GB_RMC21
++	bool "Gigabyte RMC 2.1"
++	depends on ARCH_ASPEED
++	select RTC_DRV_ASPEED
++	select GPIO_ASPEED
++	select GPIO_SYSFS
++	help
++	  Say Y here if you intend to run this kernel on the RMC
++	  of an Gigabyte v 2.1 board
++
+ endif
+diff --git a/arch/arm/mach-aspeed/aspeed.c b/arch/arm/mach-aspeed/aspeed.c
+index 11d8a61..df8a775 100755
+--- a/arch/arm/mach-aspeed/aspeed.c
++++ b/arch/arm/mach-aspeed/aspeed.c
+@@ -200,6 +200,7 @@ static void __init aspeed_init_early(void)
+ {
+ 	u32 reg;
+ 
++#if 0
+ 	// XXX UART stuff to fix to pinmux & co
+ 	writel(0x02010023, AST_IO(AST_BASE_LPC | 0x9c));
+ 	writel(SCU_PASSWORD, AST_IO(AST_BASE_SCU)); // UNLOCK SCU
+@@ -222,7 +223,7 @@ static void __init aspeed_init_early(void)
+ 	 * Ensure all IPs except GPIO and LPC are reset on watchdog expiry
+ 	 */
+ 	writel(0x001fdff3, AST_IO(AST_BASE_SCU | 0x9c));
+-
++#endif
+ 	/*
+ 	 * Temporary setup of AST registers until pinmux driver is complete
+ 	 */

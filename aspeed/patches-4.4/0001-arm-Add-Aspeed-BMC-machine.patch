@@ -1,0 +1,1407 @@
+From 6539250f8cb10f282aee08b79aecf189b52d9a29 Mon Sep 17 00:00:00 2001
+From: Benjamin Herrenschmidt <benh@kernel.crashing.org>
+Date: Tue, 14 Apr 2015 15:43:46 +1000
+Subject: [PATCH 01/56] arm: Add Aspeed BMC machine
+
+Builds on Benh's initial bringup.
+
+ - Fix reboot. aspeed_restart was declarted __init, so machine_restart
+   was jumping into random memory. We can now reboot using the watchdog.
+ - Add some device definitions
+ - Use defines for aspeed machine
+ - Add hpll to dts so drivers can query it
+ - Build sram driver. We have a 32K chunk of SRAM on the AHB bus. Use
+   the existing driver to provide access to the memory via genalloc.
+ - Enable UART clock divisor. Our .dts assumes that the UART clock is
+   divided by 13, but different u-boots may leave this bit in different
+   states. Initialise it in aspeed_early_init explicitly.
+ - Register APB clock with clk subsystem. This uses the fixed clock that
+   Ben added to the device tree. It allows us to use the clock framework
+   to query speeds from drivers.
+ - irqchip/aspeed: Update to newer IRQ API
+ - Use a common dtsi file for aspeed devices. The dts files for palmetto
+   and barreleye are mostly the same; use a dtsi file for the common
+   chip parts, with the board-specific things in the per-platform files.
+   * Add #address- & #size-cells properties to i2c.
+   * Added i2c busses and devices
+   * Update device tree for ncsi support
+ - Add HDD backplane and SAS expander VPD EEPROMS to device tree
+
+Signed-off-by: Joel Stanley <joel@jms.id.au>
+Signed-off-by: Jeremy Kerr <jk@ozlabs.org>
+---
+ arch/arm/Kconfig                               |   2 +
+ arch/arm/Kconfig.debug                         |   1 +
+ arch/arm/Makefile                              |   1 +
+ arch/arm/boot/dts/Makefile                     |   1 +
+ arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts |  52 ++++
+ arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts  |  34 +++
+ arch/arm/boot/dts/ast2400.dtsi                 | 350 +++++++++++++++++++++++++
+ arch/arm/mach-aspeed/Kconfig                   |  23 ++
+ arch/arm/mach-aspeed/Makefile                  |   3 +
+ arch/arm/mach-aspeed/aspeed.c                  | 235 +++++++++++++++++
+ arch/arm/mach-aspeed/include/mach/ast2400.h    | 117 +++++++++
+ drivers/clocksource/Makefile                   |   1 +
+ drivers/clocksource/moxart_timer.c             |  92 +++++--
+ drivers/irqchip/Makefile                       |   1 +
+ drivers/irqchip/irq-aspeed-vic.c               | 259 ++++++++++++++++++
+ 15 files changed, 1151 insertions(+), 21 deletions(-)
+ create mode 100644 arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+ create mode 100644 arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
+ create mode 100644 arch/arm/boot/dts/ast2400.dtsi
+ create mode 100644 arch/arm/mach-aspeed/Kconfig
+ create mode 100644 arch/arm/mach-aspeed/Makefile
+ create mode 100644 arch/arm/mach-aspeed/aspeed.c
+ create mode 100644 arch/arm/mach-aspeed/include/mach/ast2400.h
+ create mode 100644 drivers/irqchip/irq-aspeed-vic.c
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index 34e1569..bdbac11 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -860,6 +860,8 @@ source "arch/arm/mach-meson/Kconfig"
+ 
+ source "arch/arm/mach-moxart/Kconfig"
+ 
++source "arch/arm/mach-aspeed/Kconfig"
++
+ source "arch/arm/mach-mv78xx0/Kconfig"
+ 
+ source "arch/arm/mach-imx/Kconfig"
+diff --git a/arch/arm/Kconfig.debug b/arch/arm/Kconfig.debug
+index ddbb361..847149e 100644
+--- a/arch/arm/Kconfig.debug
++++ b/arch/arm/Kconfig.debug
+@@ -1202,6 +1202,7 @@ choice
+ 
+ 	config DEBUG_LL_UART_8250
+ 		bool "Kernel low-level debugging via 8250 UART"
++		select DEBUG_UART_8250
+ 		help
+ 		  Say Y here if you wish the debug print routes to direct
+ 		  their output to an 8250 UART.  You can use this option
+diff --git a/arch/arm/Makefile b/arch/arm/Makefile
+index 2c2b28e..299cc13 100644
+--- a/arch/arm/Makefile
++++ b/arch/arm/Makefile
+@@ -184,6 +184,7 @@ machine-$(CONFIG_ARCH_LPC32XX)		+= lpc32xx
+ machine-$(CONFIG_ARCH_MESON)		+= meson
+ machine-$(CONFIG_ARCH_MMP)		+= mmp
+ machine-$(CONFIG_ARCH_MOXART)		+= moxart
++machine-$(CONFIG_ARCH_ASPEED)		+= aspeed
+ machine-$(CONFIG_ARCH_MV78XX0)		+= mv78xx0
+ machine-$(CONFIG_ARCH_MVEBU)		+= mvebu
+ machine-$(CONFIG_ARCH_MXC)		+= imx
+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
+index 30bbc37..b4bae62 100644
+--- a/arch/arm/boot/dts/Makefile
++++ b/arch/arm/boot/dts/Makefile
+@@ -777,6 +777,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += \
+ 	mt8127-moose.dtb \
+ 	mt8135-evbp1.dtb
+ dtb-$(CONFIG_ARCH_ZX) += zx296702-ad1.dtb
++dtb-$(CONFIG_MACH_OPP_PALMETTO_BMC) += aspeed-bmc-opp-palmetto.dtb
+ endif
+ 
+ dtstree		:= $(srctree)/$(src)
+diff --git a/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts b/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+new file mode 100644
+index 0000000..c2c3b84
+--- /dev/null
++++ b/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+@@ -0,0 +1,52 @@
++/dts-v1/;
++
++#include "ast2400.dtsi"
++
++/ {
++	model = "Barrelye BMC";
++	compatible = "rackspace,barreleye-bmc", "aspeed,ast2400";
++	ahb {
++		apb {
++			i2c: i2c@1e78a040 {
++				i2c0: i2c-bus@40 {
++					eeprom@50 {
++						compatible = "atmel,24c256";
++						reg = <0x50>;
++						pagesize = <64>;
++					};
++					rtc@68 {
++						compatible = "dallas,ds3231";
++						reg = <0x68>;
++						// interrupts = <GPIOF0>
++					};
++					lm75@4a {
++						compatible = "national,lm75";
++						reg = <0x4a>;
++					};
++				};
++
++				i2c6: i2c-bus@1c0 {
++					nct7904@2d {
++						compatible = "nuvoton,nct7904";
++						reg = <0x2d>;
++					};
++					nct7904@2e {
++						compatible = "nuvoton,nct7904";
++						reg = <0x2e>;
++					};
++					eeprom@51 {
++						compatible = "atmel,24c02";
++						reg = <0x51>;
++						pagesize = <8>;
++					};
++					eeprom@55 {
++						compatible = "atmel,24c02";
++						reg = <0x55>;
++						pagesize = <8>;
++					};
++				};
++			};
++		};
++	};
++};
++
+diff --git a/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts b/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
+new file mode 100644
+index 0000000..2c3e824
+--- /dev/null
++++ b/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
+@@ -0,0 +1,34 @@
++/dts-v1/;
++
++#include "ast2400.dtsi"
++
++/ {
++	model = "Palmetto BMC";
++	compatible = "tyan,palmetto-bmc", "aspeed,ast2400";
++
++	ahb {
++		apb {
++			i2c: i2c@1e78a040 {
++				i2c0: i2c-bus@40 {
++					eeprom@50 {
++						compatible = "atmel,24c256";
++						reg = <0x50>;
++						pagesize = <64>;
++					};
++					rtc@68 {
++						compatible = "dallas,ds3231";
++						reg = <0x68>;
++						// interrupts = <GPIOF0>
++					};
++				};
++
++				i2c2: i2c-bus@c0 {
++					tmp423@4c {
++						compatible = "ti,tmp423";
++						reg = <0x4c>;
++					};
++				};
++			};
++		};
++	};
++};
+diff --git a/arch/arm/boot/dts/ast2400.dtsi b/arch/arm/boot/dts/ast2400.dtsi
+new file mode 100644
+index 0000000..6122c5e
+--- /dev/null
++++ b/arch/arm/boot/dts/ast2400.dtsi
+@@ -0,0 +1,350 @@
++#include "skeleton.dtsi"
++
++/ {
++	model = "Palmetto BMC";
++	compatible = "tyan,palmetto-bmc", "aspeed,ast2400";
++	#address-cells = <1>;
++	#size-cells = <1>;
++	interrupt-parent = <&vic>;
++
++	aliases {
++		serial0 = &uart5;
++	};
++
++	chosen {
++		stdout-path = &uart5;
++		bootargs = "console=ttyS4,38400";
++	};
++
++	memory {
++		reg = < 0x40000000 0x10000000 >;
++	};
++
++	cpus {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		cpu@0 {
++			compatible = "arm,arm926ej-s";
++			device_type = "cpu";
++			reg = <0>;
++		};
++	};
++
++	// FIXME
++	clocks {
++		// Do a proper driver... for now, we know the straps
++		// and uboot config on palmetto are:
++		// - CLKIN is 48Mhz
++		// - HPLL is 384Mhz
++		// - CPU:AHB is strapped 2:1
++		// - PCLK is HPLL/8 = 48Mhz
++		clk_apb: clk_apb {
++			#clock-cells = <0>;
++			compatible = "fixed-clock";
++			clock-frequency = <48000000>;
++		};
++		clk_hpll: clk_hpll {
++			#clock-cells = <0>;
++			compatible = "fixed-clock";
++			clock-frequency = <384000000>;
++		};
++	};
++
++	ahb {
++		compatible = "simple-bus";
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		vic: interrupt-controller@1e6c0080 {
++			compatible = "aspeed,new-vic";
++			interrupt-controller;
++			#interrupt-cells = <1>;
++			valid-sources = < 0xffffffff 0x0007ffff>;
++			reg = <0x1e6c0080 0x80>;
++		};
++
++		mac0: ethernet@1e660000 {
++			compatible = "faraday,ftgmac100", "aspeed,ast2400-mac";
++			reg = <0x1e660000 0x180>;
++			interrupts = <2>;
++			use-nc-si;
++			no-hw-checksum;
++		};
++
++		apb {
++			compatible = "simple-bus";
++			#address-cells = <1>;
++			#size-cells = <1>;
++			ranges;
++
++			sram@1e720000 {
++				compatible = "mmio-sram";
++				reg = <0x1e720000 0x8000>;	// 32K
++			};
++
++			ibt@1e789140 {
++				compatible = "aspeed,bt-host";
++				reg = <0x1e789140 0x18>;
++			};
++
++			i2c: i2c@1e78a040 {
++				#address-cells = <1>;
++				#size-cells = <1>;
++				compatible = "aspeed,ast2400-i2c-common";
++				reg = <0x1e78a000 0x40>;
++				ranges = <0 0x1e78a000 0x1000>;
++				interrupts = <12>;
++				clocks = <&clk_apb>;
++
++				i2c0: i2c-bus@0x40 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x40 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <0>;
++					clock-frequency = <100000>;
++					status = "okay";
++					eeprom@50 {
++						compatible = "atmel,24c256";
++						reg = <0x50>;
++						pagesize = <64>;
++					};
++					rtc@68 {
++						compatible = "dallas,ds3231";
++						reg = <0x68>;
++						// interrupts = <GPIOF0>
++					};
++				};
++
++				i2c1: i2c-bus@0x80 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x80 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <1>;
++					clock-frequency = <100000>;
++					status = "okay";
++				};
++
++				i2c2: i2c-bus@0xC0 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0xC0 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <2>;
++					clock-frequency = <100000>;
++					status = "okay";
++					tmp423@4c {
++						compatible = "ti,tmp423";
++						reg = <0x4c>;
++					};
++				};
++
++				i2c3: i2c-bus@0x100 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x100 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <3>;
++					clock-frequency = <100000>;
++					status = "okay";
++				};
++
++				i2c4: i2c-bus@0x140 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x140 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <4>;
++					clock-frequency = <100000>;
++					status = "okay";
++				};
++
++				i2c5: i2c-bus@0x180 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x180 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <5>;
++					clock-frequency = <100000>;
++					status = "okay";
++				};
++
++				i2c6: i2c-bus@0x1C0 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x1C0 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <6>;
++					clock-frequency = <100000>;
++					status = "okay";
++				};
++
++				i2c7: i2c-bus@0x300 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x300 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <7>;
++					clock-frequency = <100000>;
++					status = "okay";
++				};
++
++				i2c8: i2c-bus@0x340 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x340 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <8>;
++					clock-frequency = <100000>;
++					status = "okay";
++				};
++
++				i2c9: i2c-bus@0x380 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x380 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <9>;
++					clock-frequency = <100000>;
++					status = "disabled";
++				};
++
++				i2c10: i2c-bus@0x3C0 {
++					reg = <0x380 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <10>;
++					clock-frequency = <100000>;
++					status = "disabled";
++				};
++
++				i2c11: i2c-bus@0x400 {
++					reg = <0x400 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <11>;
++					clock-frequency = <100000>;
++					status = "disabled";
++				};
++
++				i2c12: i2c-bus@0x440 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x400 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <12>;
++					clock-frequency = <100000>;
++					status = "disabled";
++				};
++
++				i2c13: i2c-bus@0x480 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <0x480 0x40>;
++					compatible = "aspeed,ast2400-i2c-bus";
++					bus = <13>;
++					clock-frequency = <100000>;
++					status = "disabled";
++				};
++
++			};
++
++			syscon: syscon@1e6e2000 {
++				compatible = "aspeed,syscon", "syscon";
++				reg = <0x1e6e2000 0x1a8>;
++				interrupts = <19>;
++				clocks = <&clk_apb>;
++				status = "okay";
++			};
++
++			wdt: wdt@1e785000 {
++				compatible = "aspeed,wdt", "wdt";
++				reg = <0x1e785000 0x1c4>;
++				interrupts = <27>;
++				clocks = <&clk_apb>;
++			};
++
++			rtc: rtc@1e781000 {
++				compatible = "aspeed,rtc";
++				reg = <0x1e781000 0x18>;
++				status = "disabled";
++			};
++
++			timer: timer@98400000 {
++				compatible = "aspeed,timer";
++				reg = <0x1e782000 0x90>;
++				// The moxart_timer driver registers only one interrupt
++				// and assumes it's for timer 1
++				//interrupts = <16 17 18 35 36 37 38 39>;
++				interrupts = <16>;
++				clocks = <&clk_apb>;
++			};
++
++			gpio: gpio@1e780000 {
++			       compatible = "aspeed,ast2400-gpio";
++			       reg = <0x1e780000 0x1000>;
++			       interrupts = <20>;
++			};
++
++			uart1: serial@1e783000 {
++			       compatible = "ns16550a";
++			       reg = <0x1e783000 0x1000>;
++			       reg-shift = <2>;
++			       interrupts = <9>;
++			       clock-frequency = < 1843200 >;
++			       no-loopback-test;
++			};
++			uart2: serial@1e78d000 {
++			       compatible = "ns16550a";
++			       reg = <0x1e78d000 0x1000>;
++			       reg-shift = <2>;
++			       interrupts = <32>;
++			       clock-frequency = < 1843200 >;
++			       no-loopback-test;
++			};
++			/* APSS UART */
++			uart3: serial@1e78e000 {
++			       compatible = "ns16550a";
++			       reg = <0x1e78e000 0x1000>;
++			       reg-shift = <2>;
++			       interrupts = <33>;
++			       clock-frequency = < 1843200 >;
++			       no-loopback-test;
++			};
++
++			/* Host UART */
++			uart4: serial@1e78f000 {
++			       compatible = "ns16550a";
++			       reg = <0x1e78f000 0x1000>;
++			       reg-shift = <2>;
++			       interrupts = <34>;
++			       clock-frequency = < 1843200 >;
++			       current-speed = < 115200 >;
++			       no-loopback-test;
++			};
++#if 1
++			/* BMC UART */
++			uart5: serial@1e784000 {
++			       compatible = "ns16550a";
++			       reg = <0x1e784000 0x1000>;
++			       reg-shift = <2>;
++			       interrupts = <10>;
++			       clock-frequency = < 1843200 >;
++			       current-speed = < 38400 >;
++			       no-loopback-test;
++			};
++#endif
++
++			uart6: serial@1e787000 {
++			       compatible = "ns16550a";
++			       reg = <0x1e787000 0x1000>;
++			       reg-shift = <2>;
++			       interrupts = <10>;
++			       clock-frequency = < 1843200 >;
++			       current-speed = < 38400 >;
++			       no-loopback-test;
++			};
++		};
++	};
++};
+diff --git a/arch/arm/mach-aspeed/Kconfig b/arch/arm/mach-aspeed/Kconfig
+new file mode 100644
+index 0000000..47b8250
+--- /dev/null
++++ b/arch/arm/mach-aspeed/Kconfig
+@@ -0,0 +1,23 @@
++menuconfig ARCH_ASPEED
++	bool "ASpeed BMC SoCs" if ARCH_MULTI_V5
++	select CPU_ARM926T
++	select CLKSRC_MMIO
++	select GENERIC_IRQ_CHIP
++	select ARCH_REQUIRE_GPIOLIB
++	select PHYLIB if NETDEVICES
++	select MFD_SYSCON
++	select SRAM
++	help
++	  Say Y here if you want to run your kernel on hardware with an
++	  ASpeed BMC SoC. Tested on AST2400
++
++if ARCH_ASPEED
++
++config MACH_OPP_PALMETTO_BMC
++	bool "OpenPower Palmetto"
++	depends on ARCH_ASPEED
++	help
++	  Say Y here if you intend to run this kernel on the BMC
++	  of an OpenPower "Palmetto" eval board
++
++endif
+diff --git a/arch/arm/mach-aspeed/Makefile b/arch/arm/mach-aspeed/Makefile
+new file mode 100644
+index 0000000..3a4f025
+--- /dev/null
++++ b/arch/arm/mach-aspeed/Makefile
+@@ -0,0 +1,3 @@
++# Object file lists.
++
++obj-$(CONFIG_ARCH_ASPEED)	+= aspeed.o
+diff --git a/arch/arm/mach-aspeed/aspeed.c b/arch/arm/mach-aspeed/aspeed.c
+new file mode 100644
+index 0000000..397045d
+--- /dev/null
++++ b/arch/arm/mach-aspeed/aspeed.c
+@@ -0,0 +1,235 @@
++#include <linux/init.h>
++#include <linux/of_irq.h>
++#include <linux/of_platform.h>
++#include <linux/io.h>
++#include <linux/clk-provider.h>
++#include <asm/mach-types.h>
++#include <asm/mach/arch.h>
++#include <asm/mach/map.h>
++#include <mach/ast2400.h>
++
++// XXX TEMP HACKERY
++//
++// To be replaced by proper clock, pinmux and syscon drivers operating
++// from DT parameters
++
++static void __init aspeed_dt_init(void)
++{
++	of_platform_populate(NULL, of_default_bus_match_table, NULL, NULL);
++}
++
++static const struct of_device_id aspeed_clk_match[] __initconst = {
++	{
++		.compatible = "fixed-clock",
++		.data = of_fixed_clk_setup,
++	},
++	{}
++};
++
++void __init aspeed_clk_init(void __iomem *base)
++{
++	of_clk_init(aspeed_clk_match);
++}
++
++#define AST_IO_VA	0xf0000000
++#define AST_IO_PA	0x1e600000
++#define AST_IO_SZ	0x00200000
++
++#define AST_IO(__pa)	((void __iomem *)(((__pa) & 0x001fffff) | AST_IO_VA))
++
++static struct map_desc aspeed_io_desc[] __initdata __maybe_unused = {
++	{
++		.virtual	=  AST_IO_VA,
++		.pfn		= __phys_to_pfn(AST_IO_PA),
++		.length		= AST_IO_SZ,
++		.type		= MT_DEVICE
++	},
++};
++
++
++#define UART_RBR	0
++#define UART_IER	1
++#define UART_FCR	2
++#define UART_LCR	3
++#define UART_MCR	4
++#define UART_LSR	5
++#define UART_MSR	6
++#define UART_SCR	7
++#define UART_THR	UART_RBR
++#define UART_IIR	UART_FCR
++#define UART_DLL	UART_RBR
++#define UART_DLM	UART_IER
++#define UART_DLAB	UART_LCR
++
++#define LSR_DR   0x01  /* Data ready */
++#define LSR_OE   0x02  /* Overrun */
++#define LSR_PE   0x04  /* Parity error */
++#define LSR_FE   0x08  /* Framing error */
++#define LSR_BI   0x10  /* Break */
++#define LSR_THRE 0x20  /* Xmit holding register empty */
++#define LSR_TEMT 0x40  /* Xmitter empty */
++#define LSR_ERR  0x80  /* Error */
++
++#define LCR_DLAB 0x80
++
++static void ast_uart_out(unsigned int reg, u8 data)
++{
++	writeb(data, AST_IO(0x1E78F000 + reg * 4));
++}
++
++static void ast_host_uart_setup(unsigned int speed, unsigned int clock)
++{
++	unsigned int dll, base_bauds;
++
++	if (clock == 0)
++		clock = 1843200;
++	if (speed == 0)
++		speed = 9600;
++
++	base_bauds = clock / 16;
++	dll = base_bauds / speed;
++
++	ast_uart_out(UART_LCR, 0x00);
++	ast_uart_out(UART_IER, 0xff);
++	ast_uart_out(UART_IER, 0x00);
++	ast_uart_out(UART_LCR, LCR_DLAB);
++	ast_uart_out(UART_DLL, dll & 0xff);
++	ast_uart_out(UART_DLM, dll >> 8);
++	/* 8 data, 1 stop, no parity */
++	ast_uart_out(UART_LCR, 0x3);
++	/* RTS/DTR */
++	ast_uart_out(UART_MCR, 0x3);
++	/* Clear & enable FIFOs */
++	ast_uart_out(UART_FCR, 0x7);
++}
++
++static void __init do_common_setup(void)
++{
++	/* Enable LPC FWH cycles, Enable LPC to AHB bridge */
++	writel(0x00000500, AST_IO(AST_BASE_LPC | 0x80));
++
++	/* Flash controller */
++	writel(0x00000003, AST_IO(AST_BASE_SPI | 0x00));
++	writel(0x00002404, AST_IO(AST_BASE_SPI | 0x04));
++
++	/* Set UART routing */
++	writel(0x00000000, AST_IO(AST_BASE_LPC | 0x9c));
++
++	/* SCU setup */
++	writel(0x01C000FF, AST_IO(AST_BASE_SCU | 0x88));
++	writel(0xC1C000FF, AST_IO(AST_BASE_SCU | 0x8c));
++	writel(0x01C0007F, AST_IO(AST_BASE_SCU | 0x88));
++	writel(0x003FA009, AST_IO(AST_BASE_SCU | 0x90));
++
++	/* Setup scratch registers */
++	writel(0x00000042, AST_IO(AST_BASE_LPC | 0x170));
++	writel(0x00004000, AST_IO(AST_BASE_LPC | 0x174));
++}
++
++static void __init do_barreleye_setup(void)
++{
++	u32 reg;
++
++	do_common_setup();
++
++	/* Setup PNOR address mapping for 64M flash */
++	writel(0x30000C00, AST_IO(AST_BASE_LPC | 0x88));
++	writel(0xFC0003FF, AST_IO(AST_BASE_LPC | 0x8C));
++
++	/* GPIO setup */
++	writel(0x9E82FCE7, AST_IO(AST_BASE_GPIO | 0x00));
++	writel(0x0370E677, AST_IO(AST_BASE_GPIO | 0x04));
++
++	/*
++	 * Do read/modify/write on power gpio to prevent resetting power on
++	 * reboot
++	 */
++	reg = readl(AST_IO(AST_BASE_GPIO | 0x20));
++	reg |= 0xCFC8F7FD;
++	writel(reg, AST_IO(AST_BASE_GPIO | 0x20));
++	writel(0xC738F20A, AST_IO(AST_BASE_GPIO | 0x24));
++	writel(0x0031FFAF, AST_IO(AST_BASE_GPIO | 0x80));
++}
++
++static void __init do_palmetto_setup(void)
++{
++	do_common_setup();
++
++	/* Setup PNOR address mapping for 32M flash */
++	writel(0x30000E00, AST_IO(AST_BASE_LPC | 0x88));
++	writel(0xFE0001FF, AST_IO(AST_BASE_LPC | 0x8C));
++
++	/* GPIO setup */
++	writel(0x13008CE7, AST_IO(AST_BASE_GPIO | 0x00));
++	writel(0x0370E677, AST_IO(AST_BASE_GPIO | 0x04));
++	writel(0xDF48F7FF, AST_IO(AST_BASE_GPIO | 0x20));
++	writel(0xC738F202, AST_IO(AST_BASE_GPIO | 0x24));
++}
++
++#define SCU_PASSWORD	0x1688A8A8
++
++static void __init aspeed_init_early(void)
++{
++	u32 reg;
++
++	// XXX UART stuff to fix to pinmux & co
++	writel(0x02010023, AST_IO(AST_BASE_LPC | 0x9c));
++	writel(SCU_PASSWORD, AST_IO(AST_BASE_SCU)); // UNLOCK SCU
++	writel(0xcb000000, AST_IO(AST_BASE_SCU | 0x80));
++	writel(0x00fff0c0, AST_IO(AST_BASE_SCU | 0x84));
++	writel(0x10CC5E80, AST_IO(AST_BASE_SCU | 0x0c));
++
++	/* We enable the UART clock divisor in the SCU's misc control
++	 * register, as the baud rates in aspeed.dtb all assume that the
++	 * divisor is active
++	 */
++	reg = readl(AST_IO(AST_BASE_SCU | 0x2c));
++	writel(reg | 0x00001000, AST_IO(AST_BASE_SCU | 0x2c));
++	ast_host_uart_setup(115200,0);
++
++	writel(0, AST_IO(AST_BASE_WDT | 0x0c));
++	writel(0, AST_IO(AST_BASE_WDT | 0x2c));
++
++	/*
++	 * Ensure all IPs except GPIO and LPC are reset on watchdog expiry
++	 */
++	writel(0x001fdff3, AST_IO(AST_BASE_SCU | 0x9c));
++
++	/*
++	 * Temporary setup of AST registers until pinmux driver is complete
++	 */
++	if (of_machine_is_compatible("rackspace,barreleye-bmc"))
++		do_barreleye_setup();
++	if (of_machine_is_compatible("tyan,palmetto-bmc"))
++		do_palmetto_setup();
++}
++
++static void aspeed_restart(enum reboot_mode mode, const char *cmd)
++{
++	// XXX Move that to WDT driver
++	writel(0x0010, AST_IO(AST_BASE_WDT | 0x04));
++	writel(0x0003, AST_IO(AST_BASE_WDT | 0x0c));
++	writel(0x4755, AST_IO(AST_BASE_WDT | 0x08));
++	for (;;);
++}
++
++static void __init aspeed_map_io(void)
++{
++	iotable_init(aspeed_io_desc, ARRAY_SIZE(aspeed_io_desc));
++	debug_ll_io_init();
++
++	printk("SOC Rev: %08x\n", readl(AST_IO(AST_BASE_SCU | 0x7c)));
++}
++
++static const char *const aspeed_dt_match[] __initconst = {
++	"aspeed,ast2400",
++	NULL,
++};
++
++DT_MACHINE_START(aspeed_dt, "ASpeed SoC")
++	.map_io		= aspeed_map_io,
++	.init_early	= aspeed_init_early,
++	.init_machine	= aspeed_dt_init,
++	.dt_compat	= aspeed_dt_match,
++	.restart	= aspeed_restart,
++MACHINE_END
+diff --git a/arch/arm/mach-aspeed/include/mach/ast2400.h b/arch/arm/mach-aspeed/include/mach/ast2400.h
+new file mode 100644
+index 0000000..1daf85c
+--- /dev/null
++++ b/arch/arm/mach-aspeed/include/mach/ast2400.h
+@@ -0,0 +1,117 @@
++/*
++ * Copyright 2015 IBM Corp.
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version
++ * 2 of the License, or (at your option) any later version.
++ *
++ */
++
++#ifndef AST2400_H
++#define AST2400_H
++
++/* Periperhal base addresses */
++#define AST_BASE_LEGACY_SRAM	0x10000000 /* Legacy BMC Static Memory */
++#define AST_BASE_LEGACY_SMC	0x16000000 /* Legacy BMC Static Memory Controller (SMC) */
++#define AST_BASE_APBC		0x1E600000 /* AHB Bus Controller (AHBC) */
++#define AST_BASE_FMC		0x1E620000 /* New BMC Static Memory Controller (FMC) */
++#define AST_BASE_SPI		0x1E630000 /* SPI Memory Controller */
++#define AST_BASE_MIC		0x1E640000 /* Memory Integrity Check Controller (MIC) */
++#define AST_BASE_MAC1		0x1E660000 /* Fast Ethernet MAC Controller #1 (MAC1) */
++#define AST_BASE_MAC2		0x1E680000 /* Fast Ethernet MAC Controller #2 (MAC2) */
++#define AST_BASE_USB2HUB	0x1E6A0000 /* USB2.0 Hub Controller */
++#define AST_BASE_USB2HC		0x1E6A1000 /* USB2.0 Host Controller */
++#define AST_BASE_USB1HC		0x1E6B0000 /* USB1.1 Host Controller */
++#define AST_BASE_VIC		0x1E6C0000 /* Interrupt Controller (VIC) */
++#define AST_BASE_MMC		0x1E6E0000 /* SDRAM Controller (MMC) */
++#define AST_BASE_USB1		0x1E6E1000 /* USB1.1 Controller */
++#define AST_BASE_SCU		0x1E6E2000 /* System Control Unit (SCU) */
++#define AST_BASE_HACE		0x1E6E3000 /* Hash & Crypto Engine (HACE) */
++#define AST_BASE_JTAG		0x1E6E4000 /* JTAG Master */
++#define AST_BASE_CRT		0x1E6E6000 /* Graphics Display Controller (CRT) */
++#define AST_BASE_DMA		0x1E6E7000 /* X-DMA Controller */
++#define AST_BASE_MCTP		0x1E6E8000 /* MCTP Controller */
++#define AST_BASE_ADC		0x1E6E9000 /* ADC Voltage Monitor */
++#define AST_BASE_LPCPLUS	0x1E6EC000 /* LPC+ Controller */
++#define AST_BASE_VIDEO		0x1E700000 /* Video Engine */
++#define AST_BASE_SRAM		0x1E720000 /* 32KB SRAM */
++#define AST_BASE_SDIO		0x1E740000 /* SD/SDIO Controller */
++#define AST_BASE_2D		0x1E760000 /* 2D Engine */
++#define AST_BASE_GPIO		0x1E780000 /* GPIO Controller */
++#define AST_BASE_RTC		0x1E781000 /* Real-Time Clock (RTC) */
++#define AST_BASE_TIMER		0x1E782000 /* Timer #1 ∼ #8 Controller */
++#define AST_BASE_UART1		0x1E783000 /* UART - #1 (LPC UART1) */
++#define AST_BASE_UART5		0x1E784000 /* UART - #5 (BMC Debug) */
++#define AST_BASE_WDT		0x1E785000 /* Watchdog Timer (WDT) */
++#define AST_BASE_PWM		0x1E786000 /* PWM & Fan Tacho Controller */
++#define AST_BASE_VUART		0x1E787000 /* Virtual UART (VUART) */
++#define AST_BASE_PUART		0x1E788000 /* Pass Through UART (PUART) */
++#define AST_BASE_LPC		0x1E789000 /* LPC Controller */
++#define AST_BASE_I2C		0x1E78A000 /* I2C/SMBus Controller */
++#define AST_BASE_PECI		0x1E78B000 /* PECI Controller */
++#define AST_BASE_UART2		0x1E78D000 /* UART - #2 (LPC UART2) */
++#define AST_BASE_UART3		0x1E78E000 /* UART - #3 */
++#define AST_BASE_UART4		0x1E78F000 /* UART - #4 */
++
++/* Memory */
++#define AST_BASE_BMCSRAM	0x20000000 /* BMC Static Memory */
++#define AST_BASE_SPIMEM		0x30000000 /* SPI Flash Memory */
++#define AST_BASE_SDRAM		0x40000000 /* SDRAM */
++#define AST_BASE_LPCBRIDGE	0x60000000 /* AHB Bus to LPC Bus Bridge */
++#define AST_BASE_LPCPBRIDGE	0x70000000 /* AHB Bus to LPC+ Bus Bridge */
++
++/* BMC interrupt sources */
++#define AST_ID_SDRAM		0	/* SDRAM interrupt */
++#define AST_ID_MIC		1	/* MIC interrupt */
++#define AST_ID_MAC1		2	/* MAC1 interrupt */
++#define AST_ID_MAC2		3	/* MAC2 interrupt */
++#define AST_ID_CRYPTO		4	/* Crypto interrupt */
++#define AST_ID_USB2		5	/* USB 2.0 Hub/Host interrupt */
++#define AST_ID_XDMA		6	/* X-DMA interrupt */
++#define AST_ID_VIDEO		7	/* Video Engine interrupt */
++#define AST_ID_LPC		8	/* LPC interrupt */
++#define AST_ID_UART1		9	/* UART1 interrupt */
++#define AST_ID_UART5		10	/* UART5 interrupt */
++#define AST_ID_11		11	/* Reserved */
++#define AST_ID_I2C		12	/* I2C/SMBus interrupt */
++#define AST_ID_USB1HID		13	/* USB 1.1 HID interrupt */
++#define AST_ID_USB1HOST		14	/* USB 1.1 Host interrupt */
++#define AST_ID_PECI		15	/* PECI interrupt */
++#define AST_ID_TIMER1		16	/* Timer 1 interrupt */
++#define AST_ID_TIMER2		17	/* Timer 2 interrupt */
++#define AST_ID_TIMER3		18	/* Timer 3 interrupt */
++#define AST_ID_SMC		19	/* SMC interrupt */
++#define AST_ID_GPIO		20	/* GPIO interrupt */
++#define AST_ID_SCU		21	/* SCU interrupt */
++#define AST_ID_RTC		22	/* RTC alarm interrupt */
++#define AST_ID_23		23	/* Reserved */
++#define AST_ID_24		24	/* Reserved */
++#define AST_ID_GRAPHICS		25	/* Graphics CRT interrupt */
++#define AST_ID_SDIO		26	/* SD/SDIO interrupt */
++#define AST_ID_WDT		27	/* WDT alarm interrupt */
++#define AST_ID_PWM		28	/* PWM/Tachometer interrupt */
++#define AST_ID_2D		29	/* Graphics 2D interrupt */
++#define AST_ID_WAKEUP		30	/* System Wakeup Control */
++#define AST_ID_ADC		31	/* ADC interrupt */
++#define AST_ID_UART2		32	/* UART2 interrupt */
++#define AST_ID_UART3		33	/* UART3 interrupt */
++#define AST_ID_UART4		34	/* UART4 interrupt */
++#define AST_ID_TIMER4		35	/* Timer 4 interrupt */
++#define AST_ID_TIMER5		36	/* Timer 5 interrupt */
++#define AST_ID_TIMER6		37	/* Timer 6 interrupt */
++#define AST_ID_TIMER38		38	/* Timer 7 interrupt */
++#define AST_ID_TIMER39		39	/* Timer 8 interrupt */
++#define AST_ID_SGPIOMASTER	40	/* SGPIO Master interrupt */
++#define AST_ID_SGPIOSLAVE	41	/* SGPIO Slave interrupt */
++#define AST_ID_MCTP		42	/* MCTP interrupt */
++#define AST_ID_JTAG		43	/* JTAG Master interrupt */
++#define AST_ID_44		44	/* Reserved */
++#define AST_ID_COPRO		45	/* Coprocessor interrupt */
++#define AST_ID_MAILBOX		46	/* MailBox interrupt */
++#define AST_ID_GPIOL1		47	/* GPIOL1 direct input */
++#define AST_ID_GPIOL3		48	/* GPIOL3 direct input */
++#define AST_ID_GPIOM1		49	/* GPIOM1 direct input */
++#define AST_ID_GPIOM3		50	/* GPIOM3 direct input */
++
++#endif /*AST2400_H*/
+diff --git a/drivers/clocksource/Makefile b/drivers/clocksource/Makefile
+index 56bd16e..c871365 100644
+--- a/drivers/clocksource/Makefile
++++ b/drivers/clocksource/Makefile
+@@ -23,6 +23,7 @@ obj-$(CONFIG_ARCH_BCM2835)	+= bcm2835_timer.o
+ obj-$(CONFIG_ARCH_CLPS711X)	+= clps711x-timer.o
+ obj-$(CONFIG_ARCH_ATLAS7)	+= timer-atlas7.o
+ obj-$(CONFIG_ARCH_MOXART)	+= moxart_timer.o
++obj-$(CONFIG_ARCH_ASPEED)	+= moxart_timer.o
+ obj-$(CONFIG_ARCH_MXS)		+= mxs_timer.o
+ obj-$(CONFIG_CLKSRC_PXA)	+= pxa_timer.o
+ obj-$(CONFIG_ARCH_PRIMA2)	+= timer-prima2.o
+diff --git a/drivers/clocksource/moxart_timer.c b/drivers/clocksource/moxart_timer.c
+index 19857af..bd8dbf3 100644
+--- a/drivers/clocksource/moxart_timer.c
++++ b/drivers/clocksource/moxart_timer.c
+@@ -36,45 +36,66 @@
+ #define TIMER_INTR_MASK		0x38
+ 
+ /*
+- * TIMER_CR flags:
++ * Moxart TIMER_CR flags:
+  *
+  * TIMEREG_CR_*_CLOCK	0: PCLK, 1: EXT1CLK
+  * TIMEREG_CR_*_INT	overflow interrupt enable bit
+  */
+-#define TIMEREG_CR_1_ENABLE	BIT(0)
+-#define TIMEREG_CR_1_CLOCK	BIT(1)
+-#define TIMEREG_CR_1_INT	BIT(2)
+-#define TIMEREG_CR_2_ENABLE	BIT(3)
+-#define TIMEREG_CR_2_CLOCK	BIT(4)
+-#define TIMEREG_CR_2_INT	BIT(5)
+-#define TIMEREG_CR_3_ENABLE	BIT(6)
+-#define TIMEREG_CR_3_CLOCK	BIT(7)
+-#define TIMEREG_CR_3_INT	BIT(8)
+-#define TIMEREG_CR_COUNT_UP	BIT(9)
+-
+-#define TIMER1_ENABLE		(TIMEREG_CR_2_ENABLE | TIMEREG_CR_1_ENABLE)
+-#define TIMER1_DISABLE		(TIMEREG_CR_2_ENABLE)
++#define MOXART_CR_1_ENABLE	BIT(0)
++#define MOXART_CR_1_CLOCK	BIT(1)
++#define MOXART_CR_1_INT		BIT(2)
++#define MOXART_CR_2_ENABLE	BIT(3)
++#define MOXART_CR_2_CLOCK	BIT(4)
++#define MOXART_CR_2_INT		BIT(5)
++#define MOXART_CR_3_ENABLE	BIT(6)
++#define MOXART_CR_3_CLOCK	BIT(7)
++#define MOXART_CR_3_INT		BIT(8)
++#define MOXART_CR_COUNT_UP	BIT(9)
++
++#define MOXART_TIMER1_ENABLE	(MOXART_CR_2_ENABLE | MOXART_CR_1_ENABLE)
++#define MOXART_TIMER1_DISABLE	(MOXART_CR_2_ENABLE)
++
++/*
++ * The ASpeed variant of the IP block has a different layout
++ * for the control register
++ */
++#define ASPEED_CR_1_ENABLE	BIT(0)
++#define ASPEED_CR_1_CLOCK	BIT(1)
++#define ASPEED_CR_1_INT		BIT(2)
++#define ASPEED_CR_2_ENABLE	BIT(4)
++#define ASPEED_CR_2_CLOCK	BIT(5)
++#define ASPEED_CR_2_INT		BIT(6)
++#define ASPEED_CR_3_ENABLE	BIT(8)
++#define ASPEED_CR_3_CLOCK	BIT(9)
++#define ASPEED_CR_3_INT		BIT(10)
++
++#define ASPEED_TIMER1_ENABLE	(ASPEED_CR_2_ENABLE | ASPEED_CR_1_ENABLE)
++#define ASPEED_TIMER1_DISABLE	(ASPEED_CR_2_ENABLE)
+ 
+ static void __iomem *base;
+ static unsigned int clock_count_per_tick;
++static unsigned int t1_disable_val, t1_enable_val;
+ 
+ static int moxart_shutdown(struct clock_event_device *evt)
+ {
+-	writel(TIMER1_DISABLE, base + TIMER_CR);
++	writel(t1_disable_val, base + TIMER_CR);
+ 	return 0;
+ }
+ 
+ static int moxart_set_oneshot(struct clock_event_device *evt)
+ {
+-	writel(TIMER1_DISABLE, base + TIMER_CR);
++	writel(t1_disable_val, base + TIMER_CR);
+ 	writel(~0, base + TIMER1_BASE + REG_LOAD);
+ 	return 0;
+ }
+ 
+ static int moxart_set_periodic(struct clock_event_device *evt)
+ {
++	writel(t1_disable_val, base + TIMER_CR);
+ 	writel(clock_count_per_tick, base + TIMER1_BASE + REG_LOAD);
+-	writel(TIMER1_ENABLE, base + TIMER_CR);
++	writel(0, base + TIMER1_BASE + REG_MATCH1);
++	writel(t1_enable_val, base + TIMER_CR);
++
+ 	return 0;
+ }
+ 
+@@ -83,12 +104,12 @@ static int moxart_clkevt_next_event(unsigned long cycles,
+ {
+ 	u32 u;
+ 
+-	writel(TIMER1_DISABLE, base + TIMER_CR);
++	writel(t1_disable_val, base + TIMER_CR);
+ 
+ 	u = readl(base + TIMER1_BASE + REG_COUNT) - cycles;
+ 	writel(u, base + TIMER1_BASE + REG_MATCH1);
+ 
+-	writel(TIMER1_ENABLE, base + TIMER_CR);
++	writel(t1_enable_val, base + TIMER_CR);
+ 
+ 	return 0;
+ }
+@@ -119,7 +140,7 @@ static struct irqaction moxart_timer_irq = {
+ 	.dev_id		= &moxart_clockevent,
+ };
+ 
+-static void __init moxart_timer_init(struct device_node *node)
++static void __init __moxart_timer_init(struct device_node *node)
+ {
+ 	int ret, irq;
+ 	unsigned long pclk;
+@@ -150,8 +171,21 @@ static void __init moxart_timer_init(struct device_node *node)
+ 
+ 	clock_count_per_tick = DIV_ROUND_CLOSEST(pclk, HZ);
+ 
++	/* Clean up match registers we will still get an occasional interrupt
++	 * from timer 2 but I haven't enabled it for now
++	 */
++	writel(0, base + TIMER1_BASE + REG_MATCH1);
++	writel(0, base + TIMER1_BASE + REG_MATCH2);
++	writel(0, base + TIMER2_BASE + REG_MATCH1);
++	writel(0, base + TIMER2_BASE + REG_MATCH2);
++
++	/* Start  timer 2 rolling as our main wall clock source, keep timer 1
++	 * disabled
++	 */	
++	writel(0, base + TIMER_CR);
+ 	writel(~0, base + TIMER2_BASE + REG_LOAD);
+-	writel(TIMEREG_CR_2_ENABLE, base + TIMER_CR);
++	writel(t1_disable_val, base + TIMER_CR);
++
+ 
+ 	moxart_clockevent.cpumask = cpumask_of(0);
+ 	moxart_clockevent.irq = irq;
+@@ -165,4 +199,20 @@ static void __init moxart_timer_init(struct device_node *node)
+ 	clockevents_config_and_register(&moxart_clockevent, pclk,
+ 					0x4, 0xfffffffe);
+ }
++
++static void __init moxart_timer_init(struct device_node *node)
++{
++	t1_enable_val = MOXART_TIMER1_ENABLE;
++	t1_disable_val = MOXART_TIMER1_DISABLE;
++	__moxart_timer_init(node);
++}
++
++static void __init aspeed_timer_init(struct device_node *node)
++{
++	t1_enable_val = ASPEED_TIMER1_ENABLE;
++	t1_disable_val = ASPEED_TIMER1_DISABLE;
++	__moxart_timer_init(node);
++}
++
+ CLOCKSOURCE_OF_DECLARE(moxart, "moxa,moxart-timer", moxart_timer_init);
++CLOCKSOURCE_OF_DECLARE(aspeed, "aspeed,timer", aspeed_timer_init);
+diff --git a/drivers/irqchip/Makefile b/drivers/irqchip/Makefile
+index 177f78f..b3aa894 100644
+--- a/drivers/irqchip/Makefile
++++ b/drivers/irqchip/Makefile
+@@ -55,3 +55,4 @@ obj-$(CONFIG_RENESAS_H8S_INTC)		+= irq-renesas-h8s.o
+ obj-$(CONFIG_ARCH_SA1100)		+= irq-sa11x0.o
+ obj-$(CONFIG_INGENIC_IRQ)		+= irq-ingenic.o
+ obj-$(CONFIG_IMX_GPCV2)			+= irq-imx-gpcv2.o
++obj-$(CONFIG_ARCH_ASPEED)		+= irq-aspeed-vic.o
+diff --git a/drivers/irqchip/irq-aspeed-vic.c b/drivers/irqchip/irq-aspeed-vic.c
+new file mode 100644
+index 0000000..ce029cc
+--- /dev/null
++++ b/drivers/irqchip/irq-aspeed-vic.c
+@@ -0,0 +1,259 @@
++/*
++ *  Copyright (C) 2015 - Ben Herrenschmidt, IBM Corp.
++ *
++ *  Driver for Aspeed "new" VIC as found in SoC generation 3 and later
++ *
++ *  Based on irq-vic.c:
++ *
++ *  Copyright (C) 1999 - 2003 ARM Limited
++ *  Copyright (C) 2000 Deep Blue Solutions Ltd
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ */
++
++#include <linux/export.h>
++#include <linux/init.h>
++#include <linux/list.h>
++#include <linux/io.h>
++#include <linux/irq.h>
++#include <linux/irqchip.h>
++#include <linux/irqchip/chained_irq.h>
++#include <linux/irqdomain.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_irq.h>
++#include <linux/syscore_ops.h>
++#include <linux/device.h>
++#include <linux/slab.h>
++
++#include <asm/exception.h>
++#include <asm/irq.h>
++
++
++//#define DBG(fmt...) do { printk("AVIC " fmt); } while(0)
++#define DBG(fmt...) do { } while(0)
++
++/* These definitions correspond to the "new mapping" of the
++ * register set that interleaves "high" and "low". The offsets
++ * below are for the "low" register, add 4 to get to the high one
++ */
++#define AVIC_IRQ_STATUS		0x00
++#define AVIC_FIQ_STATUS		0x08
++#define AVIC_RAW_STATUS		0x10
++#define AVIC_INT_SELECT		0x18
++#define AVIC_INT_ENABLE		0x20
++#define AVIC_INT_ENABLE_CLR	0x28
++#define AVIC_INT_TRIGGER	0x30
++#define AVIC_INT_TRIGGER_CLR	0x38
++#define AVIC_INT_SENSE		0x40
++#define AVIC_INT_DUAL_EDGE	0x48
++#define AVIC_INT_EVENT		0x50
++#define AVIC_EDGE_CLR		0x58
++#define AVIC_EDGE_STATUS	0x60
++
++struct aspeed_vic {
++	void __iomem		*base;
++	u32			valid_sources[2];
++	u32			edge_sources[2];
++	struct irq_domain	*dom;
++};
++static struct aspeed_vic *system_avic;
++
++static void vic_init_hw(struct aspeed_vic *vic)
++{
++	u32 sense;
++
++	/* Disable all interrupts */
++	writel(0xffffffff, vic->base + AVIC_INT_ENABLE_CLR);
++	writel(0xffffffff, vic->base + AVIC_INT_ENABLE_CLR + 4);
++
++	/* Make sure no soft trigger is on */
++	writel(0xffffffff, vic->base + AVIC_INT_TRIGGER_CLR);
++	writel(0xffffffff, vic->base + AVIC_INT_TRIGGER_CLR + 4);
++
++	/* Set everything to be IRQ */
++	writel(0, vic->base + AVIC_INT_SELECT);
++	writel(0, vic->base + AVIC_INT_SELECT + 4);
++
++	/* Some interrupts have a programable high/low level trigger
++	 * (4 GPIO direct inputs), for now we assume this was configured
++	 * by firmware. We read which ones are edge now.
++	 */
++	sense = readl(vic->base + AVIC_INT_SENSE);
++	vic->edge_sources[0] = ~sense;
++	sense = readl(vic->base + AVIC_INT_SENSE + 4);
++	vic->edge_sources[1] = ~sense;
++
++	/* Clear edge detection latches */
++	writel(0xffffffff, vic->base + AVIC_EDGE_CLR);
++	writel(0xffffffff, vic->base + AVIC_EDGE_CLR + 4);
++}
++
++static void __exception_irq_entry avic_handle_irq(struct pt_regs *regs)
++{
++	struct aspeed_vic *vic = system_avic;
++	u32 stat, irq;
++	u32 loops = 0;
++
++	/* We handle interrupts in a loop, is that necessary ? TBD */
++	for (;;) {
++		irq = 0;
++		stat = readl_relaxed(vic->base + AVIC_IRQ_STATUS);		
++		if (!stat) {
++			stat = readl_relaxed(vic->base + AVIC_IRQ_STATUS + 4);
++			irq = 32;
++		}
++		if (stat == 0)
++			break;
++		irq += ffs(stat) - 1;
++		if (irq != 16)
++			DBG("irq=%d\n", irq);
++		handle_domain_irq(vic->dom, irq, regs);
++		loops++;
++	}
++	if (loops == 0)
++		DBG("S!\n");
++}
++
++static void avic_ack_irq(struct irq_data *d)
++{
++	struct aspeed_vic *vic = irq_data_get_irq_chip_data(d);
++	unsigned int sidx = d->hwirq >> 5;
++	unsigned int sbit = 1u << (d->hwirq & 0x1f);
++
++	if (d->hwirq != 16)
++		DBG("ACK %ld\n", d->hwirq);
++	/* Clear edge latch for edge interrupts, nop for level */
++	if (vic->edge_sources[sidx] & sbit)
++		writel(sbit, vic->base + AVIC_EDGE_CLR + sidx * 4);
++}
++
++static void avic_mask_irq(struct irq_data *d)
++{
++	struct aspeed_vic *vic = irq_data_get_irq_chip_data(d);
++	unsigned int sidx = d->hwirq >> 5;
++	unsigned int sbit = 1u << (d->hwirq & 0x1f);
++
++	if (d->hwirq != 16)
++		DBG("MASK %ld\n", d->hwirq);
++	writel(sbit, vic->base + AVIC_INT_ENABLE_CLR + sidx * 4);
++}
++
++static void avic_unmask_irq(struct irq_data *d)
++{
++	struct aspeed_vic *vic = irq_data_get_irq_chip_data(d);
++	unsigned int sidx = d->hwirq >> 5;
++	unsigned int sbit = 1u << (d->hwirq & 0x1f);
++
++	if (d->hwirq != 16)
++		DBG("UNMASK %ld\n", d->hwirq);
++	writel(sbit, vic->base + AVIC_INT_ENABLE + sidx * 4);
++}
++
++/* For level irq, faster than going through a nop "ack" and mask */
++static void avic_mask_ack_irq(struct irq_data *d)
++{
++	struct aspeed_vic *vic = irq_data_get_irq_chip_data(d);
++	unsigned int sidx = d->hwirq >> 5;
++	unsigned int sbit = 1u << (d->hwirq & 0x1f);
++
++	if (d->hwirq != 16)
++		DBG("MASK_ACK %ld\n", d->hwirq);
++
++	/* First mask */
++	writel(sbit, vic->base + AVIC_INT_ENABLE_CLR + sidx * 4);
++
++	/* Then clear edge latch for edge interrupts */
++	if (vic->edge_sources[sidx] & sbit)
++		writel(sbit, vic->base + AVIC_EDGE_CLR + sidx * 4);
++}
++
++static struct irq_chip avic_chip = {
++	.name		= "AVIC",
++	.irq_ack	= avic_ack_irq,
++	.irq_mask	= avic_mask_irq,
++	.irq_unmask	= avic_unmask_irq,
++	.irq_mask_ack	= avic_mask_ack_irq,
++};
++
++static int avic_map(struct irq_domain *d, unsigned int irq,
++		    irq_hw_number_t hwirq)
++{
++	struct aspeed_vic *vic = d->host_data;
++	unsigned int sidx = hwirq >> 5;
++	unsigned int sbit = 1u << (hwirq & 0x1f);
++
++	/* Check if interrupt exists */
++	if (sidx > 1 || !(vic->valid_sources[sidx] & sbit))
++		return -EPERM;
++	DBG("MAP %d edge %d\n", hwirq, !!(vic->edge_sources[sidx] & sbit));
++	if (vic->edge_sources[sidx] & sbit)
++		irq_set_chip_and_handler(irq, &avic_chip, handle_edge_irq);
++	else
++		irq_set_chip_and_handler(irq, &avic_chip, handle_level_irq);
++	irq_set_chip_data(irq, vic);
++	irq_set_probe(irq);
++	return 0;
++}
++
++static struct irq_domain_ops avic_dom_ops = {
++	.map = avic_map,
++	.xlate = irq_domain_xlate_onetwocell,
++};
++
++static int __init avic_of_init(struct device_node *node,
++			       struct device_node *parent)
++{
++	void __iomem *regs;
++	struct aspeed_vic *vic;
++
++	if (WARN(parent, "non-root Aspeed VIC not supported"))
++		return -EINVAL;
++	if (WARN(system_avic, "duplicate Aspeed VIC not supported"))
++		return -EINVAL;
++
++	regs = of_iomap(node, 0);
++	if (WARN_ON(!regs))
++		return -EIO;
++
++	vic = kzalloc(sizeof(struct aspeed_vic), GFP_KERNEL);
++	if (WARN_ON(!vic)) {
++		iounmap(regs);
++		return -ENOMEM;
++	}
++	vic->base = regs;
++
++	of_property_read_u32_index(node, "valid-sources", 0,
++				   &vic->valid_sources[0]);
++	of_property_read_u32_index(node, "valid-sources", 1,
++				   &vic->valid_sources[1]);
++
++	/* Initialize soures, all masked */
++	vic_init_hw(vic);
++
++	/* Ready to receive interrupts */
++	system_avic = vic;
++	set_handle_irq(avic_handle_irq);
++
++	/* Register our domain. XXX Count valid sources */
++	vic->dom = irq_domain_add_simple(node, 64, 0,
++					 &avic_dom_ops, vic);
++
++	pr_info("Aspeed VIC Initiallized\n");
++
++	return 0;
++}
++
++IRQCHIP_DECLARE(aspeed_new_vic, "aspeed,new-vic", avic_of_init);
+-- 
+1.9.1
+

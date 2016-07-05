@@ -1,0 +1,25 @@
+--- a/include/uapi/linux/if_bridge.h	2016-06-24 20:18:38.000000000 +0300
++++ b/include/uapi/linux/if_bridge.h	2016-07-05 09:50:42.338289997 +0300
+@@ -15,7 +15,9 @@
+ 
+ #include <linux/types.h>
+ #include <linux/if_ether.h>
++#if defined(__KERNEL__)
+ #include <linux/in6.h>
++#endif
+ 
+ #define SYSFS_BRIDGE_ATTR	"bridge"
+ #define SYSFS_BRIDGE_FDB	"brforward"
+--- a/include/uapi/linux/netfilter.h	2016-06-24 20:18:38.000000000 +0300
++++ b/include/uapi/linux/netfilter.h	2016-07-05 15:25:25.744129544 +0300
+@@ -4,8 +4,10 @@
+ #include <linux/types.h>
+ #include <linux/compiler.h>
+ #include <linux/sysctl.h>
++#if defined(__KERNEL__)
+ #include <linux/in.h>
+ #include <linux/in6.h>
++#endif
+ 
+ /* Responses from hook functions. */
+ #define NF_DROP 0

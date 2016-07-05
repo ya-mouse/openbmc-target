@@ -1,0 +1,147 @@
+From 8dfb2332b51b49fab9261ef7b923d6bdcc9a6e95 Mon Sep 17 00:00:00 2001
+From: "Milton D. Miller II" <miltonm@us.ibm.com>
+Date: Thu, 21 Jan 2016 20:25:51 -0600
+Subject: [PATCH 17/56] aspeed: update bmc dts with attached flash
+
+Add the attached spi flash chips attached to the static memory
+controller and the SPI memory controller.  The partitions and label
+for the SMC attached flash are included in a separate file for import
+from other build systems.
+
+Signed-off-by: Milton Miller <miltonm@us.ibm.com>
+---
+ arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts     | 35 ++++++++++++++++++++++
+ arch/arm/boot/dts/aspeed-bmc-opp-flash-layout.dtsi | 28 +++++++++++++++++
+ arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts      | 35 ++++++++++++++++++++++
+ 3 files changed, 98 insertions(+)
+ create mode 100644 arch/arm/boot/dts/aspeed-bmc-opp-flash-layout.dtsi
+
+diff --git a/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts b/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+index 1de054c..fe4c007 100644
+--- a/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
++++ b/arch/arm/boot/dts/aspeed-bmc-opp-barreleye.dts
+@@ -7,6 +7,41 @@
+ 	model = "Barrelye BMC";
+ 	compatible = "rackspace,barreleye-bmc", "aspeed,ast2400";
+ 	ahb {
++		fmc@1e620000 {
++			reg = < 0x1e620000 0x94
++				0x20000000 0x02000000 >;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			compatible = "aspeed,fmc";
++			flash@0 {
++				reg = < 0 >;
++				compatible = "jedec,spi-nor" ;
++				/*
++				 * Possibly required props:
++				 * spi-max-frequency = <>
++				 * spi-tx-bus-width = <>
++				 * spi-rx-bus-width  = <>
++				 * m25p,fast-read
++				 * spi-cpol if inverse clock polarity (CPOL)
++				 * spi-cpha if shifted clock phase (CPHA)
++				 */
++#include "aspeed-bmc-opp-flash-layout.dtsi"
++			};
++		};
++		spi@1e630000 {
++			reg = < 0x1e630000 0x18
++				0x30000000 0x02000000 >;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			compatible = "aspeed,smc";
++			flash {
++				reg = < 0 >;
++				compatible = "jedec,spi-nor" ;
++				label = "pnor";
++				/* spi-max-frequency = <>; */
++				/* m25p,fast-read; */
++			};
++		};
+ 		apb {
+ 			i2c: i2c@1e78a040 {
+ 				i2c0: i2c-bus@40 {
+diff --git a/arch/arm/boot/dts/aspeed-bmc-opp-flash-layout.dtsi b/arch/arm/boot/dts/aspeed-bmc-opp-flash-layout.dtsi
+new file mode 100644
+index 0000000..ca8639b
+--- /dev/null
++++ b/arch/arm/boot/dts/aspeed-bmc-opp-flash-layout.dtsi
+@@ -0,0 +1,28 @@
++/* This file is the label for the bmc primary flash and its partitions */
++				label = "bmc";
++				#address-cells = < 1 >;
++				#size-cells = < 1 >;
++				u-boot {
++					reg = < 0 0x60000 >;
++					label = "u-boot";
++				};
++				u-boot-env {
++					reg = < 0x60000 0x20000 >;
++					label = "u-boot-env";
++				};
++				kernel  {
++					reg = < 0x80000 0x280000 >;
++					label = "kernel";
++				};
++				initramfs {
++					reg = < 0x300000 0x1c0000 >;
++					label = "initramfs";
++				};
++				rofs  {
++					reg = < 0x4c0000 0x1740000 >;
++					label = "rofs";
++				};
++				rwfs  {
++					reg = < 0x1c00000 0x400000 >;
++					label = "rwfs";
++				};
+diff --git a/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts b/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
+index 92a7c77..9aacae7 100644
+--- a/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
++++ b/arch/arm/boot/dts/aspeed-bmc-opp-palmetto.dts
+@@ -8,6 +8,41 @@
+ 	compatible = "tyan,palmetto-bmc", "aspeed,ast2400";
+ 
+ 	ahb {
++		fmc@1e620000 {
++			reg = < 0x1e620000 0x94
++				0x20000000 0x02000000 >;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			compatible = "aspeed,fmc";
++			flash@0 {
++				reg = < 0 >;
++				compatible = "jedec,spi-nor" ;
++				/*
++				 * Possibly required props:
++				 * spi-max-frequency = <>
++				 * spi-tx-bus-width = <>
++				 * spi-rx-bus-width  = <>
++				 * m25p,fast-read
++				 * spi-cpol if inverse clock polarity (CPOL)
++				 * spi-cpha if shifted clock phase (CPHA)
++				 */
++#include "aspeed-bmc-opp-flash-layout.dtsi"
++			};
++		};
++		spi@1e630000 {
++			reg = < 0x1e630000 0x18
++				0x30000000 0x02000000 >;
++			#address-cells = <1>;
++			#size-cells = <0>;
++			compatible = "aspeed,smc";
++			flash {
++				reg = < 0 >;
++				compatible = "jedec,spi-nor" ;
++				label = "pnor";
++				/* spi-max-frequency = <>; */
++				/* m25p,fast-read; */
++			};
++		};
+ 		apb {
+ 			i2c: i2c@1e78a040 {
+ 				i2c0: i2c-bus@40 {
+-- 
+1.9.1
+

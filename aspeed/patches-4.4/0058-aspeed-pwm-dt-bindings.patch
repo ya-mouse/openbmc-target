@@ -1,0 +1,19 @@
+--- /dev/null	2015-11-10 10:55:06.652224999 +0300
++++ b/include/dt-bindings/pwm/ast-pwm.h	2016-06-27 23:04:14.088218073 +0300
+@@ -0,0 +1,16 @@
++/*
++ * This header provides constants for most PWM bindings.
++ *
++ * Most PWM bindings can include a flags cell as part of the PWM specifier.
++ * In most cases, the format of the flags cell uses the standard values
++ * defined in this header.
++ */
++
++#ifndef _DT_BINDINGS_PWM_AST_PWM_H
++#define _DT_BINDINGS_PWM_AST_PWM_H
++
++#define PWM_TYPE_M			0
++#define PWM_TYPE_N			1
++#define PWM_TYPE_O			2
++
++#endif
