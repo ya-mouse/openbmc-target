@@ -10,6 +10,10 @@
 					reg = < 0x20000 0x10000 >;
 					label = "u-boot-env";
 				};
+				dtb {
+					reg = < 0x30000 0x10000 >;
+					label = "device-tree";
+				};
 				kernel  {
 					reg = < 0x100000 0x300000 >;
 					label = "kernel";
