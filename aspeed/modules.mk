@@ -38,9 +38,23 @@ define KernelPackage/i2c-aspeed
   TITLE:=I2C Aspeed bus
   DEPENDS:=@TARGET_aspeed +kmod-i2c-core
   FILES:=\
-	$(LINUX_DIR)/drivers/i2c/busses/i2c-aspeed.ko
+	$(LINUX_DIR)/drivers/i2c/busses/i2c-aspeed.ko \
+	$(LINUX_DIR)/drivers/i2c/i2c-slave-eeprom.ko
 
-  AUTOLOAD:=$(call AutoLoad,1,i2c-aspeed)
+  AUTOLOAD:=$(call AutoLoad,1,i2c-aspeed i2c-slave-eeprom)
 endef
 
 $(eval $(call KernelPackage,i2c-aspeed))
+
+define KernelPackage/ipmi
+  SUBMENU:=I2C support
+  TITLE:=IPMI drivers
+  DEPENDS:=@TARGET_aspeed +kmod-i2c-core
+  FILES:=\
+	$(LINUX_DIR)/drivers/char/ipmi/ipmi_ssif.ko \
+	$(LINUX_DIR)/drivers/char/ipmi/ipmi_si.ko \
+	$(LINUX_DIR)/drivers/char/ipmi/ipmi_msghandler.ko \
+	$(LINUX_DIR)/drivers/char/ipmi/ipmi_devintf.ko
+endef
+
+$(eval $(call KernelPackage,ipmi))
