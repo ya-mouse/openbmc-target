@@ -58,3 +58,47 @@ define KernelPackage/ipmi
 endef
 
 $(eval $(call KernelPackage,ipmi))
+
+define KernelPackage/net-ftmac100
+  SUBMENU:=Network Devices
+  TITLE:=Faraday FTMAC10/100
+  DEPENDS:=+kmod-mii
+  FILES:=\
+	$(LINUX_DIR)/drivers/net/ethernet/faraday/ftmac100.ko
+  AUTOLOAD:=$(call AutoLoad,17,net-ftmac100 ftmac100)
+endef
+
+$(eval $(call KernelPackage,net-ftmac100))
+
+define KernelPackage/net-ftgmac100
+  SUBMENU:=Network Devices
+  TITLE:=Faraday FTGMAC
+  DEPENDS:=+kmod-mii
+  FILES:=\
+	$(LINUX_DIR)/drivers/net/ethernet/faraday/ftgmac100.ko
+  AUTOLOAD:=$(call AutoLoad,17,net-ftgmac100 ftgmac100)
+endef
+
+$(eval $(call KernelPackage,net-ftgmac100))
+
+define KernelPackage/phy-b53
+  SUBMENU:=Network Devices
+  TITLE:=Broadcom B53xx
+  DEPENDS:=+kmod-swconfig
+  FILES:=\
+	$(LINUX_DIR)/drivers/net/phy/b53/b53_common.ko \
+	$(LINUX_DIR)/drivers/net/phy/b53/b53_mdio.ko
+  AUTOLOAD:=$(call AutoLoad,16,phy-b53 b53_mdio)
+endef
+
+$(eval $(call KernelPackage,phy-b53))
+
+define KernelPackage/phy-realtek
+  SUBMENU:=Network Devices
+  TITLE:=Realtek PHY driver
+  FILES:=\
+	$(LINUX_DIR)/drivers/net/phy/realtek.ko
+  AUTOLOAD:=$(call AutoLoad,16,phy-realtek realtek)
+endef
+
+$(eval $(call KernelPackage,phy-realtek))
