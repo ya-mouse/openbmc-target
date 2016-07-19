@@ -81,17 +81,15 @@ endef
 
 $(eval $(call KernelPackage,net-ftgmac100))
 
-define KernelPackage/phy-b53
+define KernelPackage/phy-bcm5221
   SUBMENU:=Network Devices
-  TITLE:=Broadcom B53xx
-  DEPENDS:=+kmod-swconfig
+  TITLE:=Broadcom BCM5221
   FILES:=\
-	$(LINUX_DIR)/drivers/net/phy/b53/b53_common.ko \
-	$(LINUX_DIR)/drivers/net/phy/b53/b53_mdio.ko
-  AUTOLOAD:=$(call AutoLoad,16,phy-b53 b53_mdio)
+	$(LINUX_DIR)/drivers/net/phy/bcm5221.ko
+  AUTOLOAD:=$(call AutoLoad,16,phy-bcm5221 bcm5221)
 endef
 
-$(eval $(call KernelPackage,phy-b53))
+$(eval $(call KernelPackage,phy-bcm5221))
 
 define KernelPackage/phy-realtek
   SUBMENU:=Network Devices
