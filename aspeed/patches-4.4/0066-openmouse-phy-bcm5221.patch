@@ -1,0 +1,146 @@
+--- linux-4.4.14/drivers/net/phy/Kconfig.orig	2016-07-19 16:05:39.454419841 +0300
++++ linux-4.4.14/drivers/net/phy/Kconfig	2016-07-12 13:22:12.043828518 +0300
+@@ -86,6 +86,12 @@ config SMSC_PHY
+ config BCM_NET_PHYLIB
+ 	tristate
+ 
++config BCM5221_PHY
++	tristate "Broadcom 5221 PHY"
++	depends on PHYLIB
++	---help---
++	  Currently supports the BCM5221 PHY.
++
+ config BROADCOM_PHY
+ 	tristate "Drivers for Broadcom PHYs"
+ 	select BCM_NET_PHYLIB
+--- linux-4.4.14/drivers/net/phy/Makefile.orig	2016-07-19 16:05:43.534355911 +0300
++++ linux-4.4.14/drivers/net/phy/Makefile	2016-07-12 13:07:48.073277308 +0300
+@@ -17,6 +17,7 @@ obj-$(CONFIG_TERANETICS_PHY)	+= teraneti
+ obj-$(CONFIG_VITESSE_PHY)	+= vitesse.o
+ obj-$(CONFIG_BCM_NET_PHYLIB)	+= bcm-phy-lib.o
+ obj-$(CONFIG_BROADCOM_PHY)	+= broadcom.o
++obj-$(CONFIG_BCM5221_PHY)	+= bcm5221.o
+ obj-$(CONFIG_BCM63XX_PHY)	+= bcm63xx.o
+ obj-$(CONFIG_BCM7XXX_PHY)	+= bcm7xxx.o
+ obj-$(CONFIG_BCM87XX_PHY)	+= bcm87xx.o
+--- linux-4.4.14/drivers/net/phy/bcm5221.c.orig	2015-11-10 10:55:06.652224999 +0300
++++ linux-4.4.14/drivers/net/phy/bcm5221.c	2016-07-12 14:59:18.492909424 +0300
+@@ -0,0 +1,118 @@
++/*
++ *	drivers/net/phy/broadcom.c
++ *
++ *	Broadcom BCM5411, BCM5421 and BCM5461 Gigabit Ethernet
++ *	transceivers.
++ *
++ *	Copyright (c) 2006  Maciej W. Rozycki
++ *
++ *	Inspired by code written by Amy Fong.
++ *
++ *	This program is free software; you can redistribute it and/or
++ *	modify it under the terms of the GNU General Public License
++ *	as published by the Free Software Foundation; either version
++ *	2 of the License, or (at your option) any later version.
++ */
++
++#include <linux/module.h>
++#include <linux/phy.h>
++#include <linux/delay.h>
++#include <linux/sungem_phy.h>
++
++MODULE_DESCRIPTION("Broadcom BCM5221 PHY driver");
++MODULE_AUTHOR("Anton D. Kachalov");
++MODULE_LICENSE("GPL");
++
++static int bcm5221_soft_reset(struct phy_device *phydev)
++{
++	u16 val;
++	int limit = 12;
++
++	printk("soft INTR: %04x\n", phy_read(phydev, MII_RESV2));
++	val = phy_read(phydev, MII_BMCR);
++	val &= ~(BMCR_ISOLATE | BMCR_PDOWN);
++	val |= BMCR_RESET;
++	phy_write(phydev, MII_BMCR, val);
++
++	udelay(100);
++
++	printk("bcm5221_soft_reset\n");
++	while (--limit) {
++		val = phy_read(phydev, MII_BMCR);
++		if ((val & BMCR_RESET) == 0)
++			break;
++		udelay(50);
++	}
++	if ((val & BMCR_ISOLATE) && limit > 0)
++		phy_write(phydev, MII_BMCR, val & ~BMCR_ISOLATE);
++
++	printk("soft INTR: %04x\n", phy_read(phydev, MII_RESV2));
++	printk("-- ret %d\n", limit);
++	return limit <= 0 ? -1 : 0;
++}
++
++static int bcm5221_config_init(struct phy_device *phydev)
++{
++	u16 data;
++
++	printk("bcm5211_config_init\n");
++	data = phy_read(phydev, MII_BCM5221_TEST);
++	phy_write(phydev, MII_BCM5221_TEST,
++		data | MII_BCM5221_TEST_ENABLE_SHADOWS);
++
++	data = phy_read(phydev, MII_BCM5221_SHDOW_AUX_STAT2);
++	phy_write(phydev, MII_BCM5221_SHDOW_AUX_STAT2,
++		data | MII_BCM5221_SHDOW_AUX_STAT2_APD);
++
++	data = phy_read(phydev, MII_BCM5221_SHDOW_AUX_MODE4);
++	phy_write(phydev, MII_BCM5221_SHDOW_AUX_MODE4,
++		data | MII_BCM5221_SHDOW_AUX_MODE4_CLKLOPWR);
++
++	data = phy_read(phydev, MII_BCM5221_TEST);
++	phy_write(phydev, MII_BCM5221_TEST,
++		data & ~MII_BCM5221_TEST_ENABLE_SHADOWS);
++
++	return 0;
++}
++
++static int bcm5221_suspend(struct phy_device *phydev)
++{
++	u16 data;
++
++	data = phy_read(phydev, MII_BCM5221_TEST);
++	phy_write(phydev, MII_BCM5221_TEST,
++		data | MII_BCM5221_TEST_ENABLE_SHADOWS);
++
++	data = phy_read(phydev, MII_BCM5221_SHDOW_AUX_MODE4);
++	phy_write(phydev, MII_BCM5221_SHDOW_AUX_MODE4,
++		  data | MII_BCM5221_SHDOW_AUX_MODE4_IDDQMODE);
++
++	return 0;
++}
++
++static struct phy_driver broadcom_drivers[] = {
++{
++	.phy_id		= 0x004061e0,
++	.phy_id_mask	= 0xfffffff0,
++	.name		= "Broadcom BCM5221",
++	.features	= (SUPPORTED_10baseT_Half | SUPPORTED_10baseT_Full |
++			   SUPPORTED_100baseT_Half | SUPPORTED_100baseT_Full |
++			   SUPPORTED_Autoneg | SUPPORTED_TP | SUPPORTED_MII |
++			   SUPPORTED_Pause),
++	.flags		= PHY_HAS_MAGICANEG,
++	.soft_reset	= bcm5221_soft_reset,
++	.config_init	= bcm5221_config_init,
++	.suspend	= bcm5221_suspend,
++	.config_aneg	= genphy_config_aneg,
++	.read_status	= genphy_read_status,
++	.driver		= { .owner = THIS_MODULE },
++} };
++
++module_phy_driver(broadcom_drivers);
++
++static struct mdio_device_id __maybe_unused broadcom_tbl[] = {
++	{ 0x004061e0, 0xfffffff0 },
++	{ }
++};
++
++MODULE_DEVICE_TABLE(mdio, broadcom_tbl);
