@@ -3,15 +3,15 @@
 				#address-cells = < 1 >;
 				#size-cells = < 1 >;
 				u-boot {
-					reg = < 0 0x20000 >;
+					reg = < 0 0x30000 >;
 					label = "u-boot";
 				};
 				u-boot-env {
-					reg = < 0x20000 0x10000 >;
+					reg = < 0x30000 0x10000 >;
 					label = "u-boot-env";
 				};
 				dtb {
-					reg = < 0x30000 0x10000 >;
+					reg = < 0x40000 0x10000 >;
 					label = "device-tree";
 				};
 				kernel  {
