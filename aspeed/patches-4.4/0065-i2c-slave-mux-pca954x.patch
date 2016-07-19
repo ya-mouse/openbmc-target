@@ -1,0 +1,162 @@
+--- linux-4.4.14/drivers/i2c/muxes/i2c-mux-pca954x.c.orig	2016-07-08 10:48:49.000000000 +0300
++++ linux-4.4.14/drivers/i2c/muxes/i2c-mux-pca954x.c	2016-07-19 15:48:35.074473765 +0300
+@@ -64,6 +64,14 @@ struct pca954x {
+ 	u8 last_chan;		/* last register value */
+ 	u8 deselect;
+ 	struct i2c_client *client;
++
++#if CONFIG_I2C_SLAVE
++	int adap_off;
++	int cur_chan;
++	struct i2c_client *dummy;
++	struct i2c_client **slaves;
++	struct i2c_algorithm algo; /* have to store it separately while i2c_adapter's is readonly */
++#endif
+ };
+ 
+ struct chip_desc {
+@@ -147,6 +155,20 @@ static int pca954x_reg_write(struct i2c_
+ 	return ret;
+ }
+ 
++#if CONFIG_I2C_SLAVE
++static int pca954x_slave_cb(struct i2c_client *client,
++			    enum i2c_slave_event event, u8 *val)
++{
++	struct pca954x *data = i2c_get_clientdata(client);
++
++	if (data->cur_chan < 0 || !data->slaves[data->cur_chan])
++		return -EINVAL;
++
++	/* pass it to the real client */
++	return i2c_slave_event(data->slaves[data->cur_chan], event, val);
++}
++#endif
++
+ static int pca954x_select_chan(struct i2c_mux_core *muxc, u32 chan)
+ {
+ 	struct pca954x *data = i2c_mux_priv(muxc);
+@@ -165,6 +187,28 @@ static int pca954x_select_chan(struct i2
+ 	if (data->last_chan != regval) {
+ 		ret = pca954x_reg_write(muxc->parent, client, regval);
+ 		data->last_chan = regval;
++#if CONFIG_I2C_SLAVE
++		if (data->slaves[chan]) {
++			if (!data->dummy) {
++				data->dummy = i2c_new_dummy(to_i2c_adapter(data->client->dev.parent),
++							    data->slaves[chan]->addr);
++				data->dummy->flags |= I2C_CLIENT_SLAVE;
++				i2c_set_clientdata(data->dummy, data);
++				data->dummy->slave_cb = pca954x_slave_cb;
++			} else {
++				data->dummy->addr = data->slaves[chan]->addr;
++			}
++			if (data->cur_chan == -1 || data->slaves[data->cur_chan]->addr != data->dummy->addr) {
++				if (data->cur_chan != -1) {
++//					printk("UNREG %d\n", i2c_slave_unregister(data->dummy));
++					data->dummy->adapter->algo->unreg_slave(data->dummy);
++				}
++//				printk("REG %d\n", i2c_slave_register(data->dummy, pca954x_slave_cb));
++				data->dummy->adapter->algo->reg_slave(data->dummy);
++			}
++		}
++		data->cur_chan = chan;
++#endif
+ 	}
+ 
+ 	return ret;
+@@ -179,10 +223,47 @@ static int pca954x_deselect_mux(struct i
+ 		return 0;
+ 
+ 	/* Deselect active channel */
++#if CONFIG_I2C_SLAVE
++	data->cur_chan = -1;
++	/* TODO: Stand up till last i2c-slave drop */
++	// i2c_slave_unregister(data->dummy);
++#endif
+ 	data->last_chan = 0;
+ 	return pca954x_reg_write(muxc->parent, client, data->last_chan);
+ }
+ 
++#if CONFIG_I2C_SLAVE
++static int pca954x_reg_slave(struct i2c_client *slave)
++{
++	struct pca954x *data = i2c_get_adapdata(slave->adapter);
++
++//	printk("REG SLAVE: slave %d  chan %d\n", slave->addr, slave->adapter->nr - data->adap_off);
++
++	if (data->slaves[slave->adapter->nr - data->adap_off])
++		return -EBUSY;
++
++	if (slave->flags & I2C_CLIENT_TEN)
++		return -EAFNOSUPPORT;
++
++	data->slaves[slave->adapter->nr - data->adap_off] = slave;
++
++	return 0;
++}
++
++static int pca954x_unreg_slave(struct i2c_client *slave)
++{
++	struct pca954x *data = i2c_get_adapdata(slave->adapter);
++
++//	printk("UNREG SLAVE: slave %d  chan %d\n", slave->addr, slave->adapter->nr - data->adap_off);
++
++	WARN_ON(!data->slaves[slave->adapter->nr - data->adap_off]);
++
++	data->slaves[slave->adapter->nr - data->adap_off] = NULL;
++
++	return 0;
++}
++#endif
++
+ /*
+  * I2C init/probing/exit functions
+  */
+@@ -228,13 +309,25 @@ static int pca954x_probe(struct i2c_clie
+ 
+ 	data->type = id->driver_data;
+ 	data->last_chan = 0;		   /* force the first selection */
++	data->cur_chan = -1;
+ 
+ 	idle_disconnect_dt = of_node &&
+ 		of_property_read_bool(of_node, "i2c-mux-idle-disconnect");
+ 
++#if CONFIG_I2C_SLAVE
++	data->slaves = devm_kzalloc(&client->dev, sizeof(struct i2c_client)
++			    * chips[data->type].nchans,
++			    GFP_KERNEL);
++	if (!data->slaves)
++		return -ENOMEM;
++#endif
++
+ 	/* Now create an adapter for each channel */
+ 	for (num = 0; num < chips[data->type].nchans; num++) {
+ 		bool idle_disconnect_pd = false;
++#if CONFIG_I2C_SLAVE
++		struct i2c_adapter *mux_adapter;
++#endif
+ 
+ 		force = 0;			  /* dynamic adap number */
+ 		class = 0;			  /* no class by default */
+@@ -259,6 +352,20 @@ static int pca954x_probe(struct i2c_clie
+ 				" %d as bus %d\n", num, force);
+ 			goto virt_reg_failed;
+ 		}
++
++#if CONFIG_I2C_SLAVE
++		mux_adapter = muxc->adapter[muxc->num_adapters-1];
++		/* For the first run fill the algo structure with i2c-mux values */
++		if (!data->algo.master_xfer) {
++			memcpy(&data->algo, mux_adapter->algo, sizeof(data->algo));
++			data->algo.reg_slave = pca954x_reg_slave;
++			data->algo.unreg_slave = pca954x_unreg_slave;
++			data->adap_off = mux_adapter->nr;
++		}
++		/* overwrite mux'es algos */
++		mux_adapter->algo = &data->algo;
++		i2c_set_adapdata(mux_adapter, data);
++#endif
+ 	}
+ 
+ 	dev_info(&client->dev,
