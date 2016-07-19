@@ -9,7 +9,7 @@
 
 	ahb {
 		mac0: ethernet@1e660000 {
-			/* use-nc-si; */
+			use-nc-si;
 			no-hw-checksum;
 		};
 
@@ -17,6 +17,16 @@
 			compatible = "faraday,ftgmac100", "aspeed,ast2400-mac";
 			reg = <0x1e680000 0x180>;
 			interrupts = <3>;
+			no-hw-checksum;
+
+			phy-handle = <&phy0>;
+			phy-mode = "rgmii";
+
+			phy0: phy@3 {
+				compatible = "ethernet-phy-id0040.61e0",
+					     "ethernet-phy-ieee802.3-c22";
+				reg = <0x0>;
+			};
 		};
 
 		fmc@1e620000 {
@@ -70,6 +80,12 @@
 					tmp@48 {
 						compatible = "national,lm75";
 						reg = <0x48>;
+					};
+				};
+				i2c6: i2c-bus@1c0 {
+					gpio-expander@20 {
+						compatible = "nxp,pca9555";
+						reg = <0x20>;
 					};
 				};
 			};
