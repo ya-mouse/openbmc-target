@@ -50,8 +50,8 @@ CONFIG_TARGET_aspeed_ast2150=y
 # CONFIG_TARGET_aspeed_ast2400 is not set
 # CONFIG_TARGET_aspeed_ast2150_Default is not set
 # CONFIG_TARGET_aspeed_ast2150_Spice is not set
-# CONFIG_TARGET_aspeed_ast2150_aspeed-rmc-gb21 is not set
-CONFIG_TARGET_aspeed_ast2150_node-MH-60=y
+CONFIG_TARGET_aspeed_ast2150_aspeed-rmc-gb21=y
+# CONFIG_TARGET_aspeed_ast2150_node-MH-60 is not set
 CONFIG_HAS_SUBTARGETS=y
 CONFIG_TARGET_BOARD="aspeed"
 CONFIG_TARGET_SUBTARGET="ast2150"
@@ -1659,11 +1659,15 @@ CONFIG_PACKAGE_kmod-nf-nat=y
 # CONFIG_PACKAGE_kmod-hfcmulti is not set
 # CONFIG_PACKAGE_kmod-hfcpci is not set
 # CONFIG_PACKAGE_kmod-ifb is not set
-# CONFIG_PACKAGE_kmod-libphy is not set
+CONFIG_PACKAGE_kmod-libphy=y
 # CONFIG_PACKAGE_kmod-macvlan is not set
-# CONFIG_PACKAGE_kmod-mii is not set
+CONFIG_PACKAGE_kmod-mii=y
+CONFIG_PACKAGE_kmod-net-ftgmac100=y
+CONFIG_PACKAGE_kmod-net-ftmac100=y
 # CONFIG_PACKAGE_kmod-of-mdio is not set
+CONFIG_PACKAGE_kmod-phy-bcm5221=y
 # CONFIG_PACKAGE_kmod-phy-broadcom is not set
+CONFIG_PACKAGE_kmod-phy-realtek=y
 # CONFIG_PACKAGE_kmod-siit is not set
 # CONFIG_PACKAGE_kmod-spi-ks8995 is not set
 # CONFIG_PACKAGE_kmod-swconfig is not set
@@ -1735,10 +1739,11 @@ CONFIG_PACKAGE_kmod-nf-nat=y
 # CONFIG_PACKAGE_kmod-gpio-dev is not set
 # CONFIG_PACKAGE_kmod-gpio-mcp23s08 is not set
 # CONFIG_PACKAGE_kmod-gpio-nxp-74hc164 is not set
-# CONFIG_PACKAGE_kmod-gpio-pca953x is not set
+CONFIG_PACKAGE_kmod-gpio-pca953x=m
 # CONFIG_PACKAGE_kmod-gpio-pcf857x is not set
 # CONFIG_PACKAGE_kmod-iio-core is not set
 # CONFIG_PACKAGE_kmod-ikconfig is not set
+CONFIG_PACKAGE_kmod-ipmi-i2c=m
 # CONFIG_PACKAGE_kmod-iusb is not set
 # CONFIG_PACKAGE_kmod-lp is not set
 # CONFIG_PACKAGE_kmod-mmc is not set
@@ -1758,6 +1763,7 @@ CONFIG_PACKAGE_kmod-regmap=y
 # CONFIG_PACKAGE_kmod-rtc-pt7c4338 is not set
 # CONFIG_PACKAGE_kmod-sdhci is not set
 # CONFIG_PACKAGE_kmod-serial-8250 is not set
+CONFIG_PACKAGE_kmod-slave-ipmb-aspeed=y
 # CONFIG_PACKAGE_kmod-softdog is not set
 CONFIG_PACKAGE_kmod-thermal=y
 # CONFIG_PACKAGE_kmod-videocap is not set
@@ -2380,7 +2386,7 @@ CONFIG_PACKAGE_libopcodes=m
 # CONFIG_PACKAGE_libowfat is not set
 # CONFIG_PACKAGE_libp11 is not set
 # CONFIG_PACKAGE_libpam is not set
-CONFIG_PACKAGE_libpcap=m
+CONFIG_PACKAGE_libpcap=y
 
 #
 # Configuration
@@ -3327,7 +3333,7 @@ CONFIG_PACKAGE_odhcp6c_ext_cer_id=0
 # CONFIG_PACKAGE_sstp-client is not set
 # CONFIG_PACKAGE_stunnel is not set
 # CONFIG_PACKAGE_tayga is not set
-CONFIG_PACKAGE_tcpdump=m
+CONFIG_PACKAGE_tcpdump=y
 # CONFIG_PACKAGE_tcpdump-mini is not set
 # CONFIG_PACKAGE_tor is not set
 # CONFIG_PACKAGE_tor-geoip is not set
@@ -3610,6 +3616,7 @@ CONFIG_MC_CHARSET=y
 # CONFIG_MC_VFS is not set
 # CONFIG_PACKAGE_mcookie is not set
 # CONFIG_PACKAGE_mdadm is not set
+CONFIG_PACKAGE_mii-diag=m
 # CONFIG_PACKAGE_mmc-utils is not set
 # CONFIG_PACKAGE_mount-utils is not set
 # CONFIG_PACKAGE_mpack is not set
@@ -3671,7 +3678,8 @@ CONFIG_PACKAGE_strace=y
 # CONFIG_PACKAGE_tmux is not set
 # CONFIG_PACKAGE_tracertools is not set
 # CONFIG_PACKAGE_triggerhappy is not set
-# CONFIG_PACKAGE_uboot-envtools is not set
+CONFIG_PACKAGE_uboot-envtools=y
+# CONFIG_UBOOT_ENVTOOLS_UBI is not set
 # CONFIG_PACKAGE_ugps is not set
 # CONFIG_PACKAGE_usb-modeswitch is not set
 # CONFIG_PACKAGE_usbmuxd is not set
