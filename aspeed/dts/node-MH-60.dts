@@ -8,8 +8,21 @@
 	compatible = "gb,rmc21", "aspeed,ast2400";
 
 	ahb {
+/*
+		mdio {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			device_type = "mdio";
+			status = "okay";
+			phy0: phy@0 {
+				device_type = "ethernet-phy";
+				compatible = "ethernet-phy-id001c.c915";
+				reg = <0x0>;
+			};
+		};
+*/
 		mac0: ethernet@1e660000 {
-			/* use-nc-si; */
+			use-nc-si;
 			no-hw-checksum;
 		};
 
@@ -17,6 +30,15 @@
 			compatible = "faraday,ftgmac100", "aspeed,ast2400-mac";
 			reg = <0x1e680000 0x180>;
 			interrupts = <3>;
+			phy-handle = <&phy0>;
+			phy-mode = "gmii";
+			no-hw-checksum;
+
+			phy0: phy@0 {
+				compatible = "ethernet-phy-id001c.c915",
+					     "ethernet-phy-ieee802.3-c22";
+				reg = <0x0>;
+			};
 		};
 
 		fmc@1e620000 {
@@ -60,7 +82,7 @@
 					tpsA@40 {
 						compatible = "tps2480";
 						reg = <0x40>;
-						shunt = <30>;
+						shunt = <5>;
 					};
 					tmpA@49 {
 						compatible = "natinonal,lm75";
