@@ -85,6 +85,8 @@
 				i2c6: i2c-bus@1c0 {
 					gpio-expander@20 {
 						compatible = "nxp,pca9555";
+						gpio-controller;
+						#gpio-cells = <2>;
 						reg = <0x20>;
 					};
 				};

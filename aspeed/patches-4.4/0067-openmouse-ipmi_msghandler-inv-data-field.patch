@@ -1,0 +1,11 @@
+--- linux-4.4.14/drivers/char/ipmi/ipmi_msghandler.c.orig	2016-07-21 20:53:58.856221101 +0300
++++ linux-4.4.14/drivers/char/ipmi/ipmi_msghandler.c	2016-07-21 20:53:52.444319857 +0300
+@@ -2692,7 +2692,7 @@ channel_handler(ipmi_smi_t intf, struct
+ 		if (msg->msg.data[0] != 0) {
+ 			/* Got an error from the channel, just go on. */
+ 
+-			if (msg->msg.data[0] == IPMI_INVALID_COMMAND_ERR) {
++			if (msg->msg.data[0] == IPMI_INVALID_COMMAND_ERR || msg->msg.data[0] == 0xcc) {
+ 				/*
+ 				 * If the MC does not support this
+ 				 * command, that is legal.  We just
