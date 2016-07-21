@@ -51,8 +51,8 @@
 +			} else {
 +				data->dummy->addr = data->slaves[chan]->addr;
 +			}
-+			if (data->cur_chan == -1 || data->slaves[data->cur_chan]->addr != data->dummy->addr) {
-+				if (data->cur_chan != -1) {
++			if (data->cur_chan == -1 || !data->slaves[data->cur_chan] || data->slaves[data->cur_chan]->addr != data->dummy->addr) {
++				if (data->cur_chan != -1 && data->slaves[data->cur_chan]) {
 +//					printk("UNREG %d\n", i2c_slave_unregister(data->dummy));
 +					data->dummy->adapter->algo->unreg_slave(data->dummy);
 +				}
