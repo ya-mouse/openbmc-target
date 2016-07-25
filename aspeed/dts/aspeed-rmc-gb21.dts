@@ -76,6 +76,12 @@
 						reset-gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
 					};
 				};
+				i2c2: i2c-bus@c0 {
+					power@40 {
+						compatible = "ti,ina219";
+						reg = <0x40>;
+					};
+				};
 				i2c3: i2c-bus@100 {
 					tmp@48 {
 						compatible = "national,lm75";
