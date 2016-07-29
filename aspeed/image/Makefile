@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
 define Image/Prepare
-	$(call Image/BuildDTB,../dts/$(PROFILE).dts,$(KDIR)/$(PROFILE).dtb)
+	$(call Image/BuildDTB,../dts/$(PROFILE).dts,$(KDIR)/$(PROFILE).dtb,,-@ -H epapr)
 	cat $(KDIR)/zImage $(KDIR)/$(PROFILE).dtb > $(KDIR)/zImage.dtb
 	mkimage -A arm -O linux -T kernel -C none -a 0x40008000 -e 0x40008000 -n 'OpenWrt Linux-$(LINUX_VERSION)' -d $(KDIR)/zImage.dtb $(KDIR)/uImage
 endef
