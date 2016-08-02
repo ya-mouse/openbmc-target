@@ -1,7 +1,7 @@
 # OpenBMC fork over OpenWRT
 ## Building with OpenWRT @ 25 of June
 ```sh
-git clone git@github.com:openwrt/openwrt.git; cd openwrt
+git clone https://github.com/openwrt/openwrt.git; cd openwrt
 git checkout 558b38f4b8e615fb5262c94dad7db2071e394ac1
 cp feeds.conf{.default,}
 cat <<EOF>>feeds.conf
