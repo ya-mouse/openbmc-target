@@ -1,6 +1,6 @@
 diff -Naurp dtc.orig/checks.c dtc/checks.c
---- dtc.orig/checks.c	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/checks.c	2016-07-28 20:59:01.360725061 +0300
+--- linux-4.4.14.orig/scripts/dtc/checks.c	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/checks.c	2016-07-28 20:59:01.360725061 +0300
 @@ -458,6 +458,8 @@ static void fixup_phandle_references(str
  				     struct node *node, struct property *prop)
  {
@@ -139,8 +139,8 @@ diff -Naurp dtc.orig/checks.c dtc/checks.c
  };
  
 diff -Naurp dtc.orig/dtc.c dtc/dtc.c
---- dtc.orig/dtc.c	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/dtc.c	2016-07-28 20:59:04.936670417 +0300
+--- linux-4.4.14.orig/scripts/dtc/dtc.c	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/dtc.c	2016-07-28 20:59:04.936670417 +0300
 @@ -29,6 +29,7 @@ int reservenum;		/* Number of memory res
  int minsize;		/* Minimum blob size */
  int padsize;		/* Additional padding to blob */
@@ -186,8 +186,8 @@ diff -Naurp dtc.orig/dtc.c dtc/dtc.c
  			usage(NULL);
  		default:
 diff -Naurp dtc.orig/dtc.h dtc/dtc.h
---- dtc.orig/dtc.h	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/dtc.h	2016-07-28 20:59:08.764611925 +0300
+--- linux-4.4.14.orig/scripts/dtc/dtc.h	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/dtc.h	2016-07-28 20:59:08.764611925 +0300
 @@ -54,6 +54,7 @@ extern int reservenum;		/* Number of mem
  extern int minsize;		/* Minimum blob size */
  extern int padsize;		/* Additional padding to blob */
@@ -257,8 +257,8 @@ diff -Naurp dtc.orig/dtc.h dtc/dtc.h
  void delete_labels(struct label **labels);
  
 diff -Naurp dtc.orig/dtc-lexer.l dtc/dtc-lexer.l
---- dtc.orig/dtc-lexer.l	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/dtc-lexer.l	2016-07-28 20:59:23.936380071 +0300
+--- linux-4.4.14.orig/scripts/dtc/dtc-lexer.l	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/dtc-lexer.l	2016-07-28 20:59:23.936380071 +0300
 @@ -113,6 +113,11 @@ static void lexical_error(const char *fm
  			return DT_V1;
  		}
@@ -272,8 +272,8 @@ diff -Naurp dtc.orig/dtc-lexer.l dtc/dtc-lexer.l
  			DPRINT("Keyword: /memreserve/\n");
  			BEGIN_DEFAULT();
 diff -Naurp dtc.orig/dtc-lexer.lex.c_shipped dtc/dtc-lexer.lex.c_shipped
---- dtc.orig/dtc-lexer.lex.c_shipped	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/dtc-lexer.lex.c_shipped	2016-07-28 20:59:27.984318210 +0300
+--- linux-4.4.14.orig/scripts/dtc/dtc-lexer.lex.c_shipped	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/dtc-lexer.lex.c_shipped	2016-07-28 20:59:27.984318210 +0300
 @@ -9,7 +9,7 @@
  #define FLEX_SCANNER
  #define YY_FLEX_MAJOR_VERSION 2
@@ -1165,8 +1165,8 @@ diff -Naurp dtc.orig/dtc-lexer.lex.c_shipped dtc/dtc-lexer.lex.c_shipped
  
  
 diff -Naurp dtc.orig/dtc-parser.tab.c_shipped dtc/dtc-parser.tab.c_shipped
---- dtc.orig/dtc-parser.tab.c_shipped	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/dtc-parser.tab.c_shipped	2016-07-28 20:59:26.888334959 +0300
+--- linux-4.4.14.orig/scripts/dtc/dtc-parser.tab.c_shipped	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/dtc-parser.tab.c_shipped	2016-07-28 20:59:26.888334959 +0300
 @@ -65,6 +65,7 @@
  #line 20 "dtc-parser.y" /* yacc.c:339  */
  
@@ -2372,8 +2372,8 @@ diff -Naurp dtc.orig/dtc-parser.tab.c_shipped dtc/dtc-parser.tab.c_shipped
  
  void yyerror(char const *s)
 diff -Naurp dtc.orig/dtc-parser.tab.h_shipped dtc/dtc-parser.tab.h_shipped
---- dtc.orig/dtc-parser.tab.h_shipped	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/dtc-parser.tab.h_shipped	2016-07-28 20:59:02.252711431 +0300
+--- linux-4.4.14.orig/scripts/dtc/dtc-parser.tab.h_shipped	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/dtc-parser.tab.h_shipped	2016-07-28 20:59:02.252711431 +0300
 @@ -46,26 +46,27 @@ extern int yydebug;
    enum yytokentype
    {
@@ -2443,8 +2443,8 @@ diff -Naurp dtc.orig/dtc-parser.tab.h_shipped dtc/dtc-parser.tab.h_shipped
  # define YYSTYPE_IS_TRIVIAL 1
  # define YYSTYPE_IS_DECLARED 1
 diff -Naurp dtc.orig/dtc-parser.y dtc/dtc-parser.y
---- dtc.orig/dtc-parser.y	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/dtc-parser.y	2016-07-28 20:59:22.220406293 +0300
+--- linux-4.4.14.orig/scripts/dtc/dtc-parser.y	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/dtc-parser.y	2016-07-28 20:59:22.220406293 +0300
 @@ -19,6 +19,7 @@
   */
  %{
@@ -2500,8 +2500,8 @@ diff -Naurp dtc.orig/dtc-parser.y dtc/dtc-parser.y
  	;
  
 diff -Naurp dtc.orig/flattree.c dtc/flattree.c
---- dtc.orig/flattree.c	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/flattree.c	2016-07-28 20:59:30.416281044 +0300
+--- linux-4.4.14.orig/scripts/dtc/flattree.c	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/flattree.c	2016-07-28 20:59:30.416281044 +0300
 @@ -255,6 +255,204 @@ static int stringtable_insert(struct dat
  	return i;
  }
@@ -2719,8 +2719,8 @@ diff -Naurp dtc.orig/flattree.c dtc/flattree.c
  }
  
 diff -Naurp dtc.orig/version_gen.h dtc/version_gen.h
---- dtc.orig/version_gen.h	2016-06-24 20:18:38.000000000 +0300
-+++ dtc/version_gen.h	2016-07-28 20:58:58.972761550 +0300
+--- linux-4.4.14.orig/scripts/dtc/version_gen.h	2016-06-24 20:18:38.000000000 +0300
++++ linux-4.4.14/scripts/dtc/version_gen.h	2016-07-28 20:58:58.972761550 +0300
 @@ -1 +1 @@
 -#define DTC_VERSION "DTC 1.4.1-g9d3649bd"
 +#define DTC_VERSION "DTC 1.4.1-g25efc119"
