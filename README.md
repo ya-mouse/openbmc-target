@@ -1,4 +1,8 @@
 # OpenBMC fork over OpenWRT
+## Build requirements for bogus LuaJIT (host build)
+1. libc6-i386-dev (provides sys/cdefs.h)
+2. linux-kernel-headers (provides asm/errno.h)
+
 ## Building with OpenWRT @ 25 of June
 ```sh
 git clone https://github.com/openwrt/openwrt.git; cd openwrt
