@@ -8708,12 +8708,12 @@ index 5fbb873..0000000
  $(eval $(call SetupHostCommand,openssl,Please install the 'openssl' utility, \
  	openssl version | grep '\(OpenSSL\|LibreSSL\)'))
  
-+$(eval $(call TestHostCommand,libc6-dev-i386, \
++$(eval $(call TestHostCommand,sys/cdefs.h, \
 +	Please install the libc6-dev package (provides sys/cdefs.h header), \
 +	echo -e 'int main(int argc, char **argv) { return 0; }' | \
 +		gcc $(HOST_CFLAGS) -include sys/cdefs.h -x c -o $(TMP_DIR)/a.out - $(HOST_LDFLAGS)))
 +
-+$(eval $(call TestHostCommand,linux-libc-dev, \
++$(eval $(call TestHostCommand,asm/errno.h, \
 +	Please install the linux-libc-dev package (provides asm/errno.h header), \
 +	echo -e 'int main(int argc, char **argv) { return 0; }' | \
 +		gcc $(HOST_CFLAGS) -include asm/errno.h -x c -o $(TMP_DIR)/a.out - $(HOST_LDFLAGS)))
