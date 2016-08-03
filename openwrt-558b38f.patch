@@ -8702,8 +8702,8 @@ index 5fbb873..0000000
 -         int b = GETARG_B(i) - 1;
 -         int j;
 -         CallInfo *ci = L->ci;
---- include/prereq-build.mk.orig	2016-08-03 18:38:59.281796231 +0300
-+++ include/prereq-build.mk	2016-08-03 18:41:49.346714848 +0300
+--- a/include/prereq-build.mk.orig	2016-08-03 18:38:59.281796231 +0300
++++ b/include/prereq-build.mk	2016-08-03 18:41:49.346714848 +0300
 @@ -163,6 +163,15 @@ $(eval $(call SetupHostCommand,file,Plea
  $(eval $(call SetupHostCommand,openssl,Please install the 'openssl' utility, \
  	openssl version | grep '\(OpenSSL\|LibreSSL\)'))
