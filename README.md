@@ -1,8 +1,4 @@
 # OpenBMC fork over OpenWRT
-## Build requirements for bogus LuaJIT (host build)
-1. libc6-i386-dev (provides sys/cdefs.h)
-2. linux-kernel-headers (provides asm/errno.h)
-
 ## Building with OpenWRT @ 25 of June
 ```sh
 git clone https://github.com/openwrt/openwrt.git; cd openwrt
@@ -13,8 +9,11 @@ src-git openbmc_target https://github.com/ya-mouse/openbmc-target.git
 src-git openbmc_packages https://github.com/ya-mouse/openbmc-packages.git
 EOF
 ./scripts/feeds update
-./scripts/feeds install -p openbmc_target aspeed
 patch -p1 < feeds/openbmc_target/openwrt-558b38f.patch
+./scripts/feeds install -p openbmc_target aspeed
+./scripts/feeds install -a -p openbmc_target
+# bogus collecting info script, remove temp files and re-run
+rm -rf tmp; ./scripts/feeds install -a -p openbmc_target
 ./scripts/feeds install -a -p packages
 ./scripts/feeds install -a -p luci
 ./scripts/feeds install -a -p openbmc_packages
