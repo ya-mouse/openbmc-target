@@ -8702,3 +8702,21 @@ index 5fbb873..0000000
 -         int b = GETARG_B(i) - 1;
 -         int j;
 -         CallInfo *ci = L->ci;
+--- include/prereq-build.mk.orig	2016-08-03 18:38:59.281796231 +0300
++++ include/prereq-build.mk	2016-08-03 18:41:49.346714848 +0300
+@@ -163,6 +163,15 @@ $(eval $(call SetupHostCommand,file,Plea
+ $(eval $(call SetupHostCommand,openssl,Please install the 'openssl' utility, \
+ 	openssl version | grep '\(OpenSSL\|LibreSSL\)'))
+ 
++$(eval $(call TestHostCommand,libc6-dev-i386, \
++	Please install the libc6-dev package (provides sys/cdefs.h header), \
++	echo -e 'int main(int argc, char **argv) { return 0; }' | \
++		gcc $(HOST_CFLAGS) -include sys/cdefs.h -x c -o $(TMP_DIR)/a.out - $(HOST_LDFLAGS)))
++
++$(eval $(call TestHostCommand,linux-libc-dev, \
++	Please install the linux-libc-dev package (provides asm/errno.h header), \
++	echo -e 'int main(int argc, char **argv) { return 0; }' | \
++		gcc $(HOST_CFLAGS) -include asm/errno.h -x c -o $(TMP_DIR)/a.out - $(HOST_LDFLAGS)))
+ 
+ # Install ldconfig stub
+ $(eval $(call TestHostCommand,ldconfig-stub,Failed to install stub, \
