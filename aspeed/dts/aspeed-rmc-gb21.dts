@@ -74,6 +74,46 @@
 						#size-cells = <0>;
 						reg = <0x74>;
 						reset-gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
+						i2c_node1: i2c@0 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <0>;
+						};
+						i2c_node2: i2c@1 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <1>;
+						};
+						i2c_node3: i2c@2 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <2>;
+						};
+						i2c_node4: i2c@3 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <3>;
+						};
+						i2c_node5: i2c@4 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <4>;
+						};
+						i2c_node6: i2c@5 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <5>;
+						};
+						i2c_node7: i2c@6 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <6>;
+						};
+						i2c_node8: i2c@7 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <7>;
+						};
 					};
 				};
 				i2c2: i2c-bus@c0 {
