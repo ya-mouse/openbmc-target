@@ -1,0 +1,23 @@
+	#address-cells = <1>;
+	#size-cells = <0>;
+        __overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <4>;
+			status = "okay";
+
+			ipmbA@11 {
+				compatible = "aspeed,i2c-ipmb";
+				reg = <0x11>;
+				slave-addr = <0x20>;
+			};
+			tpsA@40 {
+				compatible = "tps2480";
+				reg = <0x40>;
+				shunt = <5>;
+			};
+			tmpA@49 {
+				compatible = "national,lm75";
+				reg = <0x49>;
+			};
+	};

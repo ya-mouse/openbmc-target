@@ -1,0 +1,33 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "aspeed,ast2400";
+
+    fragment@0 {
+        target = <&i2c_%NODE%>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+        __overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <4>;
+			status = "okay";
+
+			ipmbB@22 {
+				compatible = "aspeed,i2c-ipmb";
+				reg = <0x22>;
+				slave-addr = <0x21>;
+			};
+			tpsB@41 {
+				compatible = "tps2480";
+				reg = <0x41>;
+				shunt = <5>;
+			};
+			tmpB@4a {
+				compatible = "national,lm75";
+				reg = <0x4a>;
+			};
+        };
+    };
+};

@@ -1,0 +1,11 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "aspeed,ast2400";
+
+    fragment@0 {
+        target = <&i2c_node6>;
+#include "_node.dtsi"
+    };
+};
