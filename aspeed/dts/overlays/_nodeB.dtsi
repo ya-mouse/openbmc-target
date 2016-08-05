@@ -3,7 +3,7 @@
 	__overlay__ {
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <4>;
+			reg = <REG>;
 			status = "okay";
 
 			ipmbB@22 {

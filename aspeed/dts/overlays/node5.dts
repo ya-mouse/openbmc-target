@@ -6,6 +6,7 @@
 
     fragment@0 {
         target = <&i2c_node5>;
+#define REG 4
 #include "_node.dtsi"
     };
 };
