@@ -1,6 +1,6 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
-        __overlay__ {
+	__overlay__ {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <4>;

@@ -1,14 +1,6 @@
-/dts-v1/;
-/plugin/;
-
-/ {
-    compatible = "aspeed,ast2400";
-
-    fragment@0 {
-        target = <&i2c_%NODE%>;
 	#address-cells = <1>;
 	#size-cells = <0>;
-        __overlay__ {
+	__overlay__ {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <4>;
@@ -28,6 +20,4 @@
 				compatible = "national,lm75";
 				reg = <0x4a>;
 			};
-        };
-    };
-};
+	};
