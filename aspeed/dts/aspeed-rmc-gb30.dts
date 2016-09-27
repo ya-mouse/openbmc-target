@@ -41,6 +41,12 @@
 				compatible = "jedec,spi-nor" ;
 				label = "alt";
 				m25p,fast-read;
+				#address-cells = < 1 >;
+				#size-cells = < 1 >;
+				2nd {
+					reg = < 0 0x02000000 >;
+					label = "2nd";
+				};
 				/*
 				 * Possibly required props:
 				 * spi-max-frequency = <>
@@ -50,7 +56,6 @@
 				 * spi-cpol if inverse clock polarity (CPOL)
 				 * spi-cpha if shifted clock phase (CPHA)
 				 */
-#include "aspeed-rmc-32M-flash-layout.dtsi"
 			};
 		};
 
