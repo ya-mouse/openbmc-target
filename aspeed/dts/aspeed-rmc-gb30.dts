@@ -1,0 +1,133 @@
+/dts-v1/;
+
+#include "ast2400.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "Gigabyte RMC v3.0";
+	compatible = "gb,rmc30", "aspeed,ast2400";
+
+	ahb {
+		mac0: ethernet@1e660000 {
+			use-nc-si;
+			no-hw-checksum;
+		};
+
+		fmc@1e620000 {
+			reg = < 0x1e620000 0x94
+				0x20000000 0x02000000
+				0x24000000 0x02000000 >;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "aspeed,fmc";
+			flash@0 {
+				reg = < 0 >;
+				compatible = "jedec,spi-nor" ;
+				label = "bmc";
+				m25p,fast-read;
+				/*
+				 * Possibly required props:
+				 * spi-max-frequency = <>
+				 * spi-tx-bus-width = <>
+				 * spi-rx-bus-width  = <>
+				 * m25p,fast-read
+				 * spi-cpol if inverse clock polarity (CPOL)
+				 * spi-cpha if shifted clock phase (CPHA)
+				 */
+#include "aspeed-rmc-32M-flash-layout.dtsi"
+			};
+			flash@1 {
+				reg = < 1 >;
+				compatible = "jedec,spi-nor" ;
+				label = "alt";
+				m25p,fast-read;
+				/*
+				 * Possibly required props:
+				 * spi-max-frequency = <>
+				 * spi-tx-bus-width = <>
+				 * spi-rx-bus-width  = <>
+				 * m25p,fast-read
+				 * spi-cpol if inverse clock polarity (CPOL)
+				 * spi-cpha if shifted clock phase (CPHA)
+				 */
+#include "aspeed-rmc-32M-flash-layout.dtsi"
+			};
+		};
+
+		apb {
+			i2c: i2c@1e78a040 {
+				i2c0: i2c-bus@40 {
+					i2cmux@74 {
+						compatible = "nxp,pca9548";
+						#address-cells = <1>;
+						#size-cells = <0>;
+						reg = <0x74>;
+						reset-gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
+						i2c_node1: i2c@0 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <0>;
+						};
+						i2c_node2: i2c@1 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <1>;
+						};
+						i2c_node3: i2c@2 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <2>;
+						};
+						i2c_node4: i2c@3 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <3>;
+						};
+						i2c_node5: i2c@4 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <4>;
+						};
+						i2c_node6: i2c@5 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <5>;
+						};
+						i2c_node7: i2c@6 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <6>;
+						};
+						i2c_node8: i2c@7 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <7>;
+						};
+					};
+				};
+				i2c2: i2c-bus@c0 {
+					power {
+						label = "POWER_IN";
+						compatible = "ti,ina219";
+						reg = <0x40>;
+					};
+				};
+				i2c3: i2c-bus@100 {
+					tmp {
+						label = "TEMP1";
+						compatible = "national,lm75";
+						reg = <0x48>;
+					};
+				};
+				i2c6: i2c-bus@1c0 {
+					gpio-expander@20 {
+						compatible = "nxp,pca9555";
+						gpio-controller;
+						#gpio-cells = <2>;
+						reg = <0x20>;
+					};
+				};
+			};
+		};
+	};
+};
