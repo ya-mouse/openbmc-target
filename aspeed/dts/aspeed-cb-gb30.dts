@@ -1,0 +1,227 @@
+/dts-v1/;
+
+#include "ast2400.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "Gigabyte RMC v3.0";
+	compatible = "gb,rmc30", "aspeed,ast2400";
+
+	ahb {
+		mac0: ethernet@1e660000 {
+/*			use-nc-si; */
+			no-hw-checksum;
+
+			phy-handle = <&phy1>;
+			phy-mode = "rgmii";
+
+			phy1: phy@0 {
+				compatible = "ethernet-phy-id001c.c915",
+					     "ethernet-phy-ieee802.3-c22";
+				reg = <0>;
+			};
+		};
+
+		mac1: ethernet@1e680000 {
+			compatible = "faraday,ftgmac100", "aspeed,ast2400-mac";
+			reg = <0x1e680000 0x180>;
+			interrupts = <3>;
+			no-hw-checksum;
+
+			phy-handle = <&phy0>;
+			phy-mode = "rgmii";
+
+			phy0: phy@1e {
+				reset-gpios = <&pca9555 7 GPIO_ACTIVE_LOW>;
+				compatible = "ethernet-phy-id0362.5c00",
+					     "ethernet-phy-ieee802.3-c22";
+				reg = <0>;
+
+				port@0 {
+					compatible = "swconfig,port";
+					swconfig,segment = "lan";
+					swconfig,portmap = <0 0>;
+				};
+
+				port@1 {
+					compatible = "swconfig,port";
+					swconfig,segment = "lan";
+					swconfig,portmap = <1 1>;
+				};
+
+				port@2 {
+					compatible = "swconfig,port";
+					swconfig,segment = "lan";
+					swconfig,portmap = <2 2>;
+				};
+
+				port@3 {
+					compatible = "swconfig,port";
+					swconfig,segment = "lan";
+					swconfig,portmap = <3 3>;
+				};
+
+				port@4 {
+					compatible = "swconfig,port";
+					swconfig,segment = "lan";
+					swconfig,portmap = <4 4>;
+				};
+
+				port@5 {
+					compatible = "swconfig,port";
+					swconfig,segment = "lan";
+					swconfig,portmap = <5 5>;
+				};
+
+				port@6 {
+					compatible = "swconfig,port";
+					swconfig,segment = "lan";
+					swconfig,portmap = <6 6>;
+				};
+
+				port@7 {
+					compatible = "swconfig,port";
+					swconfig,segment = "lan";
+					swconfig,portmap = <7 7>;
+				};
+
+				port@8 {
+					compatible = "swconfig,port";
+					swconfig,segment = "cpu";
+					swconfig,portmap = <8 8>;
+				};
+			};
+		};
+
+		fmc@1e620000 {
+			reg = < 0x1e620000 0x94
+				0x20000000 0x02000000
+				0x24000000 0x02000000 >;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "aspeed,fmc";
+			flash@0 {
+				reg = < 0 >;
+				compatible = "jedec,spi-nor" ;
+				label = "bmc";
+				/*
+				 * Possibly required props:
+				 * spi-max-frequency = <>
+				 * spi-tx-bus-width = <>
+				 * spi-rx-bus-width  = <>
+				 * m25p,fast-read
+				 * spi-cpol if inverse clock polarity (CPOL)
+				 * spi-cpha if shifted clock phase (CPHA)
+				 */
+#include "aspeed-rmc-32M-flash-layout.dtsi"
+			};
+			flash@1 {
+				reg = < 1 >;
+				compatible = "jedec,spi-nor" ;
+				label = "alt";
+				#address-cells = < 1 >;
+				#size-cells = < 1 >;
+				2nd {
+					reg = < 0 0x02000000 >;
+					label = "2nd";
+				};
+				/*
+				 * Possibly required props:
+				 * spi-max-frequency = <>
+				 * spi-tx-bus-width = <>
+				 * spi-rx-bus-width  = <>
+				 * m25p,fast-read
+				 * spi-cpol if inverse clock polarity (CPOL)
+				 * spi-cpha if shifted clock phase (CPHA)
+				 */
+			};
+		};
+
+		apb {
+			i2c: i2c@1e78a040 {
+				i2c6: i2c-bus@1c0 {
+					pca9555: gpio-expander@21 {
+						compatible = "nxp,pca9555";
+						gpio-controller;
+						#gpio-cells = <2>;
+						reg = <0x20>;
+					};
+					sensors {
+						label = "HWMON";
+						compatible = "nuvoton,w83795g";
+						reg = <0x2f>;
+					};
+					power {
+						label = "POWER_BPB";
+						compatible = "ti,ina219";
+						reg = <0x40>;
+					};
+					tmp {
+						label = "TEMP_BPB";
+						compatible = "national,lm75";
+						reg = <0x48>;
+					};
+					i2cmux@74 {
+						compatible = "nxp,pca9548";
+						#address-cells = <1>;
+						#size-cells = <0>;
+						reg = <0x74>;
+						reset-gpios = <&pca9555 15 GPIO_ACTIVE_LOW>;
+						i2c_node1: i2c@0 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <0>;
+						};
+						i2c_node2: i2c@1 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <1>;
+						};
+						i2c_node3: i2c@2 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <2>;
+						};
+						i2c_node4: i2c@3 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <3>;
+						};
+						i2c_node5: i2c@4 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <4>;
+						};
+						i2c_node6: i2c@5 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <5>;
+						};
+						i2c_node7: i2c@6 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <6>;
+						};
+						i2c_node8: i2c@7 {
+						    #address-cells = <1>;
+						    #size-cells = <0>;
+						    reg = <7>;
+						};
+					};
+				};
+				i2c8: i2c-bus@340 {
+					tmp {
+						label = "TEMP1";
+						compatible = "national,lm75";
+						reg = <0x48>;
+					};
+					fru {
+						compatible = "atmel,24c02";
+						reg = <0x56>;
+						pagesize = <32>;
+					};
+				};
+			};
+		};
+	};
+};
